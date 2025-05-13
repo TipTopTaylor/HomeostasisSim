@@ -20,6 +20,7 @@
     const { useState, useEffect, useRef } = React;
 
     const HomeostasisSimulator = () => {
+      // Game state
       const [gameActive, setGameActive] = useState(false);
       const [score, setScore] = useState(0);
       const [livesLeft, setLivesLeft] = useState(3);
@@ -43,6 +44,7 @@
       const animationFrameRef = useRef(null);
       const bodyRef = useRef(null);
 
+      // Full state definitions
       const states = [
         { id: "temperature_high", prompt: "TOO HOT! Body temperature rising!", sensor: "temperature_sensor", sensorName: "Temperature Sensor", effector: "sweat_glands", effectorName: "START SWEATING!", activeMessage: "Sweating... cooling down body...", restoreMessage: "Temperature normal! STOP SWEATING!", dangerMessage: "TOO HOT! You're overheating!", responseTime: 8000, bodyPart: "head" },
         { id: "temperature_low", prompt: "TOO COLD! Body temperature dropping!", sensor: "temperature_sensor", sensorName: "Temperature Sensor", effector: "shiver_muscles", effectorName: "START SHIVERING!", activeMessage: "Shivering... warming up body...", restoreMessage: "Temperature normal! STOP SHIVERING!", dangerMessage: "TOO COLD! You're freezing!", responseTime: 8000, bodyPart: "hands" },
@@ -54,7 +56,7 @@
         { id: "oxygen_low", prompt: "OXYGEN LOW! Can't breathe!", sensor: "oxygen_sensor", sensorName: "Oxygen Sensor", effector: "increase_breathing", effectorName: "BREATHE FASTER!", activeMessage: "Breathing faster... increasing oxygen...", restoreMessage: "Oxygen normal! BREATHE NORMALLY!", dangerMessage: "SUFFOCATING! Critical oxygen levels!", responseTime: 5500, bodyPart: "cheast" }
       ];
 
-      // 5 points per level
+      // Advance difficulty based on score
       useEffect(() => {
         if (score >= 25) setDifficulty(6);
         else if (score >= 20) setDifficulty(5);
@@ -69,182 +71,181 @@
         }
       }, [score]);
 
-      // Flash only when <2s remain
+      // Flash warning only when under 2s remaining
       useEffect(() => {
         if (!showWarning || !bodyRef.current) return;
-        let count=0, flash=true;
-        const maxFlashes=4;
-        const doFlash=()=>{
-          if(count>=maxFlashes){ setShowWarning(false); return; }
+        let count = 0, flash = true;
+        const maxFlashes = 4;
+        const doFlash = () => {
+          if (count >= maxFlashes) {
+            setShowWarning(false);
+            return;
+          }
           bodyRef.current.style.backgroundColor = flash ? 'rgba(255,0,0,0.3)' : 'white';
           flash = !flash;
           count++;
-          animationFrameRef.current = requestAnimationFrame(()=>setTimeout(doFlash,300));
+          animationFrameRef.current = requestAnimationFrame(() => setTimeout(doFlash, 300));
         };
         doFlash();
-        return ()=>cancelAnimationFrame(animationFrameRef.current);
+        return () => cancelAnimationFrame(animationFrameRef.current);
       }, [showWarning]);
 
-      useEffect(()=>{
-        if(!lifeLostNotification) return;
-        const t=setTimeout(()=>setLifeLostNotification(false),2500);
-        return ()=>clearTimeout(t);
+      // Hide life-lost notification after 2.5s
+      useEffect(() => {
+        if (!lifeLostNotification) return;
+        const t = setTimeout(() => setLifeLostNotification(false), 2500);
+        return () => clearTimeout(t);
       }, [lifeLostNotification]);
 
-      // Initial spawn 2s after Start
-      useEffect(()=>{
-        if(!gameActive) return;
-        const t=setTimeout(()=>addNewChallenge(),2000);
-        return ()=>clearTimeout(t);
-      }, [gameActive]);
+      // Spawn new challenges based on difficulty
+      useEffect(() => {
+        if (!gameActive) return;
+        const intervalTime = Math.max(2000 - (difficulty - 1) * 300, 500);
+        const spawnInterval = setInterval(() => {
+          if (currentStates.length < difficulty) addNewChallenge();
+        }, intervalTime);
+        return () => clearInterval(spawnInterval);
+      }, [gameActive, difficulty, currentStates.length]);
 
-      const getResponseTime = base => Math.max(base - ((difficulty-1)*500),3000);
+      const getResponseTime = baseTime =>
+        Math.max(baseTime - ((difficulty - 1) * 500), 3000);
 
-      // next spawn 2s later
-      const scheduleNext = ()=>setTimeout(()=>addNewChallenge(),2000);
-
-      const addNewChallenge = ()=>{
-        const available = states.filter(s=>{
-          if(currentStates.some(c=>c.id===s.id)) return false;
-          const type=s.id.split('_')[0];
+      const addNewChallenge = () => {
+        const available = states.filter(s => {
+          if (currentStates.some(c => c.id === s.id)) return false;
+          const type = s.id.split('_')[0];
           return !recentChallenges.includes(type);
         });
-        if(!available.length) return;
-        const newState=available[Math.floor(Math.random()*available.length)];
+        if (!available.length) return;
+        const newState = available[Math.floor(Math.random() * available.length)];
 
-        setCurrentStates(prev=>[...prev,newState]);
-        setActiveSensors(prev=>[...prev,newState.sensor]);
-        setResponseNeeded(prev=>({...prev,[newState.id]:true}));
-        setResponseCountdown(prev=>({...prev,[newState.id]:getResponseTime(newState.responseTime)}));
+        setCurrentStates(prev => [...prev, newState]);
+        setActiveSensors(prev => [...prev, newState.sensor]);
+        setResponseNeeded(prev => ({ ...prev, [newState.id]: true }));
+        setResponseCountdown(prev => ({ ...prev, [newState.id]: getResponseTime(newState.responseTime) }));
 
-        // countdown interval
-        const ci=setInterval(()=>{
-          setResponseCountdown(prev=>{
-            const u={...prev};
-            if(u[newState.id]){
-              u[newState.id]-=100;
-              if(u[newState.id]<=2000 && u[newState.id]>0 && responseNeeded[newState.id]){
+        // Countdown interval
+        const ci = setInterval(() => {
+          setResponseCountdown(prev => {
+            const u = { ...prev };
+            if (u[newState.id]) {
+              u[newState.id] -= 100;
+              if (u[newState.id] <= 2000 && u[newState.id] > 0 && responseNeeded[newState.id]) {
                 setShowWarning(true);
               }
             }
             return u;
           });
-        },100);
-        setCountdownIntervals(prev=>({...prev,[newState.id]:ci}));
+        }, 100);
+        setCountdownIntervals(prev => ({ ...prev, [newState.id]: ci }));
 
-        // deadline
-        const dl=setTimeout(()=>{
-          setResponseNeeded(prev=>{
-            const u={...prev};
-            if(u[newState.id]){
+        // Deadline
+        const dl = setTimeout(() => {
+          setResponseNeeded(prev => {
+            const u = { ...prev };
+            if (u[newState.id]) {
               setLifeLostNotification(true);
               setLifeLostMessage(`LIFE LOST! ${newState.dangerMessage}`);
-              setLivesLeft(l=>l-1);
+              setLivesLeft(l => l - 1);
               removeChallenge(newState.id);
-              scheduleNext();
-              u[newState.id]=false;
             }
             return u;
           });
         }, getResponseTime(newState.responseTime));
-        setEffectorTimeouts(prev=>({...prev,[newState.id+"_dl"]:dl}));
+        setEffectorTimeouts(prev => ({ ...prev, [newState.id + "_dl"]: dl }));
       };
 
-      const completeChallenge=id=>{
-        const type=id.split('_')[0];
-        setRecentChallenges(prev=>[...prev,type]);
-        const cd=Math.max(15000-(difficulty*2000),5000);
-        setTimeout(()=>setRecentChallenges(prev=>prev.filter(x=>x!==type)),cd);
+      const completeChallenge = id => {
+        const type = id.split('_')[0];
+        setRecentChallenges(prev => [...prev, type]);
+        const cd = Math.max(15000 - (difficulty * 2000), 5000);
+        setTimeout(() => setRecentChallenges(prev => prev.filter(x => x !== type)), cd);
 
-        setScore(s=>s+1);
-        setMessage(`PERFECT! Score: ${score+1}`);
+        setScore(s => s + 1);
+        setMessage(`PERFECT! Score: ${score + 1}`);
         removeChallenge(id);
-        scheduleNext();
       };
 
-      const removeChallenge=id=>{
-        const st=currentStates.find(s=>s.id===id);
-        setCurrentStates(prev=>prev.filter(s=>s.id!==id));
-        setTimeout(()=>{
-          if(st) setActiveSensors(prev=>prev.filter(x=>x!==st.sensor));
-        },300);
-        setActiveEffectors(prev=>prev.filter(e=>{
-          const ss=states.find(s=>s.id===id);
-          return !ss||e!==ss.effector;
+      const removeChallenge = id => {
+        const st = currentStates.find(s => s.id === id);
+        setCurrentStates(prev => prev.filter(s => s.id !== id));
+        setTimeout(() => {
+          if (st) setActiveSensors(prev => prev.filter(x => x !== st.sensor));
+        }, 300);
+        setActiveEffectors(prev => prev.filter(e => {
+          const ss = states.find(s => s.id === id);
+          return !ss || e !== ss.effector;
         }));
-        if(effectorTimeouts[id+"_dl"]) clearTimeout(effectorTimeouts[id+"_dl"]);
-        if(countdownIntervals[id]) clearInterval(countdownIntervals[id]);
-        setHomeostasisRestored(prev=>{const o={...prev};delete o[id];return o;});
-        setResponseNeeded(prev=>{const o={...prev};delete o[id];return o;});
-        setResponseCountdown(prev=>{const o={...prev};delete o[id];return o;});
+        if (effectorTimeouts[id + "_dl"]) clearTimeout(effectorTimeouts[id + "_dl"]);
+        if (countdownIntervals[id]) clearInterval(countdownIntervals[id]);
+        setHomeostasisRestored(prev => { const o = { ...prev }; delete o[id]; return o; });
+        setResponseNeeded(prev => { const o = { ...prev }; delete o[id]; return o; });
+        setResponseCountdown(prev => { const o = { ...prev }; delete o[id]; return o; });
       };
 
-      const findStateByEffector=eid=>states.find(s=>s.effector===eid)||null;
+      const findStateByEffector = eid => states.find(s => s.effector === eid) || null;
 
-      const handleEffectorToggle=eid=>{
-        if(!gameActive) return;
-        const rs=findStateByEffector(eid);
-        if(!rs) return;
-        const sid=rs.id;
-        const isCurr=currentStates.some(s=>s.id===sid);
+      const handleEffectorToggle = eid => {
+        if (!gameActive) return;
+        const rs = findStateByEffector(eid);
+        if (!rs) return;
+        const sid = rs.id;
+        const isCurr = currentStates.some(s => s.id === sid);
 
-        // turning OFF
-        if(activeEffectors.includes(eid)){
-          if(isCurr && homeostasisRestored[sid]){
-            setActiveEffectors(prev=>prev.filter(x=>x!==eid));
+        // Turning off
+        if (activeEffectors.includes(eid)) {
+          if (isCurr && homeostasisRestored[sid]) {
+            setActiveEffectors(prev => prev.filter(x => x !== eid));
             completeChallenge(sid);
           } else {
-            setActiveEffectors(prev=>prev.filter(x=>x!==eid));
+            setActiveEffectors(prev => prev.filter(x => x !== eid));
             setMessage("Problem not fixed yet!");
-            setLivesLeft(l=>l-1);
+            setLivesLeft(l => l - 1);
             setLifeLostNotification(true);
             setLifeLostMessage("LIFE LOST! Turned off too early!");
             removeChallenge(sid);
-            scheduleNext();
           }
           return;
         }
 
-        // correct initial activation
-        if(isCurr && responseNeeded[sid]){
-          setActiveEffectors(prev=>[...prev,eid]);
-          setHomeostasisRestored(prev=>({...prev,[sid]:false}));
-          setResponseNeeded(prev=>({...prev,[sid]:false}));
-          const half=Math.floor(getResponseTime(rs.responseTime)/2);
-          const t1=setTimeout(()=>{
-            setHomeostasisRestored(prev=>({...prev,[sid]:true}));
-            const t2=setTimeout(()=>{
-              if(activeEffectors.includes(eid)){
+        // Correct initial activation
+        if (isCurr && responseNeeded[sid]) {
+          setActiveEffectors(prev => [...prev, eid]);
+          setHomeostasisRestored(prev => ({ ...prev, [sid]: false }));
+          setResponseNeeded(prev => ({ ...prev, [sid]: false }));
+          const half = Math.floor(getResponseTime(rs.responseTime) / 2);
+          const t1 = setTimeout(() => {
+            setHomeostasisRestored(prev => ({ ...prev, [sid]: true }));
+            const t2 = setTimeout(() => {
+              if (activeEffectors.includes(eid)) {
                 setMessage("You left it on too long!");
-                setLivesLeft(l=>l-1);
+                setLivesLeft(l => l - 1);
                 setLifeLostNotification(true);
                 setLifeLostMessage("LIFE LOST! Overcompensation!");
                 removeChallenge(sid);
-                scheduleNext();
               }
-            },8000);
-            setEffectorTimeouts(prev=>({...prev,[sid+"_over"]:t2}));
-          },half);
-          setEffectorTimeouts(prev=>({...prev,[sid+"_act"]:t1}));
+            }, 8000);
+            setEffectorTimeouts(prev => ({ ...prev, [sid + "_over"]: t2 }));
+          }, half);
+          setEffectorTimeouts(prev => ({ ...prev, [sid + "_act"]: t1 }));
         }
-        // wrong effector
+        // Wrong effector
         else {
-          setActiveEffectors(prev=>[...prev,eid]);
+          setActiveEffectors(prev => [...prev, eid]);
           setMessage("Wrong effector! You lose a life!");
-          setLivesLeft(l=>l-1);
+          setLivesLeft(l => l - 1);
           setLifeLostNotification(true);
           setLifeLostMessage("LIFE LOST! Wrong click!");
-          const tw=setTimeout(()=>{
-            setActiveEffectors(prev=>prev.filter(x=>x!==eid));
-          },1500);
-          setEffectorTimeouts(prev=>({...prev,[eid+"_wrong"]:tw}));
-          scheduleNext();
+          const tw = setTimeout(() => {
+            setActiveEffectors(prev => prev.filter(x => x !== eid));
+          }, 1500);
+          setEffectorTimeouts(prev => ({ ...prev, [eid + "_wrong"]: tw }));
         }
       };
 
-      const startGame=()=>{
-        Object.values(effectorTimeouts).forEach(t=>clearTimeout(t));
-        Object.values(countdownIntervals).forEach(i=>clearInterval(i));
+      const startGame = () => {
+        Object.values(effectorTimeouts).forEach(t => clearTimeout(t));
+        Object.values(countdownIntervals).forEach(i => clearInterval(i));
         setGameActive(true);
         setScore(0);
         setLivesLeft(3);
@@ -261,9 +262,10 @@
         setRecentChallenges([]);
         setMemoryModePopupShown(false);
       };
-      const endGame=()=>{
-        Object.values(effectorTimeouts).forEach(t=>clearTimeout(t));
-        Object.values(countdownIntervals).forEach(i=>clearInterval(i));
+
+      const endGame = () => {
+        Object.values(effectorTimeouts).forEach(t => clearTimeout(t));
+        Object.values(countdownIntervals).forEach(i => clearInterval(i));
         setGameActive(false);
         setMessage(`GAME OVER! Final score: ${score}.`);
         setCurrentStates([]);
@@ -277,8 +279,16 @@
         setRecentChallenges([]);
       };
 
+      // Automatically trigger game over when lives reach 0
+      useEffect(() => {
+        if (gameActive && livesLeft <= 0) {
+          endGame();
+        }
+      }, [livesLeft, gameActive]);
+
       return (
         <>
+          {/* Memory-mode popup */}
           {showMemoryModePopup && (
             <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-20">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm text-center">
@@ -288,13 +298,30 @@
                 </p>
                 <button
                   className="bg-blue-500 text-white px-4 py-2 rounded"
-                  onClick={()=>setShowMemoryModePopup(false)}
+                  onClick={() => setShowMemoryModePopup(false)}
                 >
                   Got it!
                 </button>
               </div>
             </div>
           )}
+
+          {/* Game Over Overlay */}
+          {!gameActive && livesLeft <= 0 && (
+            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-30">
+              <div className="bg-white p-8 rounded-lg shadow-lg text-center">
+                <h2 className="text-3xl font-bold mb-4">GAME OVER!</h2>
+                <p className="text-xl mb-4">Final Score: {score}</p>
+                <button
+                  onClick={startGame}
+                  className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg text-xl"
+                >
+                  PLAY AGAIN
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-col items-center justify-center min-h-screen p-4">
             <div className="text-center mb-4">
               <h1 className="text-3xl font-bold text-blue-700 mb-2">BODY BALANCE!</h1>
@@ -302,7 +329,7 @@
                 <button
                   onClick={startGame}
                   className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg mr-4 text-xl"
-                  disabled={!gameActive===false}
+                  disabled={gameActive}
                 >
                   START GAME!
                 </button>
@@ -338,74 +365,91 @@
                     : 'bg-yellow-100 border-yellow-500'
                 }`}
               >
-                {currentStates.length>0? currentStates.map(st=>{
-                  const isActive=activeEffectors.includes(st.effector);
-                  const isRestored=homeostasisRestored[st.id];
-                  const timeRem=responseCountdown[st.id]||0;
-                  const urgent=timeRem<=2000&&timeRem>0&&responseNeeded[st.id];
-                  let msg=st.prompt;
-                  if(isActive&&!isRestored) msg=st.activeMessage;
-                  else if(isActive&&isRestored) msg=st.restoreMessage;
-                  return (
-                    <div key={st.id} className="mb-2">
-                      <p className={`text-xl font-bold ${
-                        isRestored?'text-green-600':
-                        isActive?'text-blue-600':
-                        urgent?'text-red-700':'text-red-600'
-                      }`}>
-                        {msg}
-                        {timeRem>0&&!isActive&&!isRestored&&(
-                          <span className={`ml-2 ${urgent?'text-red-700 font-extrabold':'text-red-600'}`}>
-                            {Math.ceil(timeRem/1000)}s
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  );
-                })
-                : <p className="text-xl font-bold">{message}</p>}
+                {currentStates.length > 0 ? (
+                  currentStates.map(st => {
+                    const isActive = activeEffectors.includes(st.effector);
+                    const isRestored = homeostasisRestored[st.id];
+                    const timeRem = responseCountdown[st.id] || 0;
+                    const urgent = timeRem <= 2000 && timeRem > 0 && responseNeeded[st.id];
+                    let msg = st.prompt;
+                    if (isActive && !isRestored) msg = st.activeMessage;
+                    else if (isActive && isRestored) msg = st.restoreMessage;
+                    return (
+                      <div key={st.id} className="mb-2">
+                        <p
+                          className={`text-xl font-bold ${
+                            isRestored
+                              ? 'text-green-600'
+                              : isActive
+                              ? 'text-blue-600'
+                              : urgent
+                              ? 'text-red-700'
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {msg}
+                          {timeRem > 0 && !isActive && !isRestored && (
+                            <span className={`ml-2 ${urgent ? 'text-red-700 font-extrabold' : 'text-red-600'}`}>
+                              {Math.ceil(timeRem / 1000)}s
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-xl font-bold">{message}</p>
+                )}
               </div>
             </div>
+
             <div className="flex w-full max-w-6xl justify-center">
               {/* Sensors */}
               <div className="w-1/4 pr-4">
                 <h2 className="text-xl font-bold text-blue-600 mb-4 text-center">SENSORS</h2>
                 <div className="space-y-4">
-                  {Array.from(new Set(states.map(s=>s.sensor))).map(sensor=>{
-                    const info=states.find(s=>s.sensor===sensor);
-                    const active=activeSensors.includes(sensor);
+                  {Array.from(new Set(states.map(s => s.sensor))).map(sensor => {
+                    const info = states.find(s => s.sensor === sensor);
+                    const active = activeSensors.includes(sensor);
                     return (
                       <div key={sensor} className="relative">
-                        <div className={`border-2 rounded-lg p-3 text-center transform transition-all duration-300 ${
-                          active?'bg-red-500 text-white border-red-700 font-bold scale-110 shadow-lg':'bg-gray-100 border-gray-300'
-                        }`}>
+                        <div
+                          className={`border-2 rounded-lg p-3 text-center transform transition-all duration-300 ${
+                            active
+                              ? 'bg-red-500 text-white border-red-700 font-bold scale-110 shadow-lg'
+                              : 'bg-gray-100 border-gray-300'
+                          }`}
+                        >
                           {info.sensorName}
                         </div>
-                        <div className={`h-1 absolute top-1/2 right-0 w-16 transform translate-x-16 ${
-                          active?'bg-red-500':'bg-gray-300'
-                        }`}></div>
+                        <div
+                          className={`h-1 absolute top-1/2 right-0 w-16 transform translate-x-16 ${
+                            active ? 'bg-red-500' : 'bg-gray-300'
+                          }`}
+                        ></div>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
               {/* Body */}
-              <div className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative z-10" style={{overflow:'hidden'}}>
-                <div className="human-body" style={{width:'207px',position:'relative',margin:'20px auto',height:'500px'}}>
+              <div className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative z-10" style={{ overflow: 'hidden' }}>
+                <div className="human-body" style={{ width: '207px', position: 'relative', margin: '20px auto', height: '500px' }}>
                   {/* HEAD */}
-                  <svg data-position="head" style={{position:'absolute',left:'50%',marginLeft:'-28.5px',top:'-6px',fill: currentStates.some(s=>s.bodyPart==='head')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="56.594" height="95.031" viewBox="0 0 56.594 95.031"><path d="M15.92 68.5l8.8 12.546 3.97 13.984-9.254-7.38-4.622-15.848zm27.1 0l-8.8 12.546-3.976 13.988 9.254-7.38 4.622-15.848zm6.11-27.775l.108-11.775-21.16-14.742L8.123 26.133 8.09 40.19l-3.24.215 1.462 9.732 5.208 1.81 2.36 11.63 9.72 11.018 10.856-.324 9.56-10.37 1.918-11.952 5.207-1.81 1.342-9.517zm-43.085-1.84l-.257-13.82L28.226 11.9l23.618 15.755-.216 10.37 4.976-17.085L42.556 2.376 25.49 0 10.803 3.673.002 24.415z"/></svg>
+                  <svg data-position="head" style={{ position: 'absolute', left: '50%', marginLeft: '-28.5px', top: '-6px', fill: currentStates.some(s => s.bodyPart === 'head') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="56.594" height="95.031" viewBox="0 0 56.594 95.031"><path d="M15.92 68.5l8.8 12.546 3.97 13.984-9.254-7.38-4.622-15.848zm27.1 0l-8.8 12.546-3.976 13.988 9.254-7.38 4.622-15.848zm6.11-27.775l.108-11.775-21.16-14.742L8.123 26.133 8.09 40.19l-3.24.215 1.462 9.732 5.208 1.81 2.36 11.63 9.72 11.018 10.856-.324 9.56-10.37 1.918-11.952 5.207-1.81 1.342-9.517zm-43.085-1.84l-.257-13.82L28.226 11.9l23.618 15.755-.216 10.37 4.976-17.085L42.556 2.376 25.49 0 10.803 3.673.002 24.415z"/></svg>
                   {/* SHOULDERS */}
-                  <svg data-position="shoulder" style={{position:'absolute',left:'50%',marginLeft:'-53.5px',top:'69px',fill: currentStates.some(s=>s.bodyPart==='shoulder')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="109.532" height="46.594" viewBox="0 0 109.532 46.594"><path d="M38.244-.004l1.98 9.232-11.653 2.857-7.474-2.637zm33.032 0l-1.98 9.232 11.653 2.857 7.474-2.637zm21.238 10.54l4.044-2.187 12.656 14 .07 5.33S92.76 10.66 92.515 10.535zm-1.285.58c-.008.28 17.762 18.922 17.762 18.922l.537 16.557-6.157-10.55L91.5 30.988 83.148 15.6zm-74.224-.58L12.962 8.35l-12.656 14-.062 5.325s16.52-17.015 16.764-17.14zm1.285.58C18.3 11.396.528 30.038.528 30.038L-.01 46.595l6.157-10.50 11.87-5.056L26.374 15.6z"/></svg>
+                  <svg data-position="shoulder" style={{ position: 'absolute', left: '50%', marginLeft: '-53.5px', top: '69px', fill: currentStates.some(s => s.bodyPart === 'shoulder') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="109.532" height="46.594" viewBox="0 0 109.532 46.594"><path d="M38.244-.004l1.98 9.232-11.653 2.857-7.474-2.637zm33.032 0l-1.98 9.232 11.653 2.857 7.474-2.637zm21.238 10.54l4.044-2.187 12.656 14 .07 5.33S92.76 10.66 92.515 10.535zm-1.285.58c-.008.28 17.762 18.922 17.762 18.922l.537 16.557-6.157-10.55L91.5 30.988 83.148 15.6zm-74.224-.58L12.96 8.35l-12.656 14-.062 5.325s16.52-17.015 16.764-17.14zm1.285.58C18.3 11.396.528 30.038.528 30.038L-.01 46.595l6.157-10.50 11.87-5.056L26.374 15.6z"/></svg>
                   {/* ARMS */}
-                  <svg data-position="arm" style={{position:'absolute',left:'50%',marginLeft:'-78px',top:'112px',fill: currentStates.some(s=>s.bodyPart==='arm')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="156.344" height="119.25" viewBox="0 0 156.344 119.25"><path d="M21.12 56.5a1.678 1.678 0 0 1-.427.33l.935 8.224 12.977-13.89 1.2-8.958A168.2 168.2 0 0 0 21.12 56.5zm1.387 12.522l-18.07 48.91 5.757 1.333 19.125-39.44 3.518-22.047zm-5.278-18.96l2.638 18.74-17.2 46.023L.01 113.05l6.644-35.518zm118.015 6.44a1.678 1.678 0 0 0 .426.33l-.934 8.222-12.977-13.89-1.2-8.958A168.2 168.2 0 0 1 135.24 56.5zm-1.39 12.52l18.073 48.91-5.758 1.333-19.132-39.44-3.52-22.05zm5.28-18.96l-2.64 18.74 17.2 46.023 2.658-1.775-6.643-35.518zm-103.1-12.323a1.78 1.78 0 0 1 .407-.24l3.666-27.345L33.07.015l-7.258 10.58-6.16 37.04.566 4.973a151.447 151.447 0 0 1 15.808-14.87zm84.3 0a1.824 1.824 0 0 0-.407-.24l-3.666-27.345L123.3.015l7.258 10.58 6.16 37.04-.566 4.973a151.447 151.447 0 0 0-15.822-14.87z"/></svg>
+                  <svg data-position="arm" style={{ position: 'absolute', left: '50%', marginLeft: '-78px', top: '112px', fill: currentStates.some(s => s.bodyPart === 'arm') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="156.344" height="119.25" viewBox="0 0 156.344 119.25"><path d="M21.12 56.5a1.678 1.678 0 0 1-.427.33l.935 8.224 12.977-13.89 1.2-8.958A168.2 168.2 0 0 0 21.12 56.5zm1.387 12.522l-18.07 48.91 5.757 1.333 19.125-39.44 3.518-22.047zm-5.278-18.96l2.638 18.74-17.2 46.023L.01 113.05l6.644-35.518zm118.015 6.44a1.678 1.678 0 0 0 .426.33l-.934 8.222-12.977-13.89-1.2-8.958A168.2 168.2 0 0 1 135.24 56.5zm-1.39 12.52l18.073 48.91-5.758 1.333-19.132-39.44-3.52-22.05zm5.28-18.96l-2.64 18.74 17.2 46.023 2.658-1.775-6.643-35.518zm-103.1-12.323a1.78 1.78 0 0 1 .407-.24l3.666-27.345L33.07.015l-7.258 10.58-6.16 37.04.566 4.973a151.447 151.447 0 0 1 15.808-14.87zm84.3 0a1.824 1.824 0 0 0-.407-.24l-3.666-27.345L123.3.015l7.258 10.58 6.16 37.04-.566 4.973a151.447 151.447 0 0 0-15.822-14.87z"/></svg>
                   {/* CHEST */}
-                  <svg data-position="cheast" style={{position:'absolute',left:'50%',marginLeft:'-43.5px',top:'88px',fill: currentStates.some(s=>s.bodyPart==='cheast')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="86.594" height="45.063" viewBox="0 0 86.594 45.063"><path d="M19.32 0l-9.225 16.488-10.1 5.056 6.15 4.836 4.832 14.07 11.2 4.616 17.85-8.828-4.452-34.7zm47.934 0l9.225 16.488 10.1 5.056-6.15 4.836-4.833 14.07-11.2 4.616-17.844-8.828 4.45-34.7z"/></svg>
+                  <svg data-position="cheast" style={{ position: 'absolute', left: '50%', marginLeft: '-43.5px', top: '88px', fill: currentStates.some(s => s.bodyPart === 'cheast') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="86.594" height="45.063" viewBox="0 0 86.594 45.063"><path d="M19.32 0l-9.225 16.488-10.1 5.056 6.15 4.836 4.832 14.07 11.2 4.616 17.85-8.828-4.452-34.7zm47.934 0l9.225 16.488 10.1 5.056-6.15 4.836-4.833 14.07-11.2 4.616-17.844-8.828 4.45-34.7z"/></svg>
                   {/* STOMACH */}
-                  <svg data-position="stomach" style={{position:'absolute',left:'50%',marginLeft:'-37.5px',top:'130px',fill: currentStates.some(s=>s.bodyPart==='stomach')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="75.25" height="107.594" viewBox="0 0 75.25 107.594"><path d="M19.25 7.49l16.6-7.5-.5 12.16-14.943 7.662zm-10.322 8.9l6.9 3.848-.8-9.116zm5.617-8.732L1.32 2.15 6.3 15.6zm-8.17 9.267l9.015 5.514 1.54 11.028-8.795-5.735zm15.53 5.89l.332 8.662 12.286-2.665.664-11.826zm14.61 84.783L33.28 76.062l-.08-20.53-11.654-5.736-1.32 37.5z"/></svg>
+                  <svg data-position="stomach" style={{ position: 'absolute', left: '50%', marginLeft: '-37.5px', top: '130px', fill: currentStates.some(s => s.bodyPart === 'stomach') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="75.25" height="107.594" viewBox="0 0 75.25 107.594"><path d="M19.25 7.49l16.6-7.5-.5 12.16-14.943 7.662zm-10.322 8.9l6.9 3.848-.8-9.116zm5.617-8.732L1.32 2.15 6.3 15.6zm-8.17 9.267l9.015 5.514 1.54 11.028-8.795-5.735zm15.53 5.89l.332 8.662 12.286-2.665.664-11.826zm14.61 84.783L33.28 76.062l-.08-20.53-11.654-5.736-1.32 37.5z"/></svg>
                   {/* LEGS */}
-                  <svg data-position="legs" style={{position:'absolute',left:'50%',marginLeft:'-46.5px',top:'205px',fill: currentStates.some(s=>s.bodyPart==='legs')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="93.626" height="286.625" viewBox="0 0 93.626 286.625"><path d="M17.143 138.643l-.664 5.99 4.647 5.77 1.55 9.1 3.1 1.33 2.655-13.755 1.77-4.88-1.55-3.107zm20.582.444l-3.32 9.318-7.082 13.755 1.77 12.647 5.09-14.2 4.205-7.982zm-26.557-12.645l5.09 27.29-3.32-1.777-2.656 8.875zm22.795 42.374l-1.55 4.88-3.32 20.634-.442 27.51 4.65 26.847-.223-34.39 4.87-13.754.663-15.087z"/></svg>
+                  <svg data-position="legs" style={{ position: 'absolute', left: '50%', marginLeft: '-46.5px', top: '205px', fill: currentStates.some(s => s.bodyPart === 'legs') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="93.626" height="286.625" viewBox="0 0 93.626 286.625"><path d="M17.143 138.643l-.664 5.99 4.647 5.77 1.55 9.1 3.1 1.33 2.655-13.755 1.77-4.88-1.55-3.107zm20.582.444l-3.32 9.318-7.082 13.755 1.77 12.647 5.09-14.2 4.205-7.982zm-26.557-12.645l5.09 27.29-3.32-1.777-2.656 8.875zm22.795 42.374l-1.55 4.88-3.32 20.634-.442 27.51 4.65 26.847-.223-34.39 4.87-13.754.663-15.087z"/></svg>
                   {/* HANDS */}
-                  <svg data-position="hands" style={{position:'absolute',left:'50%',marginLeft:'-102.5px',top:'224px',fill: currentStates.some(s=>s.bodyPart==='hands')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="205" height="38.938" viewBox="0 0 205 38.938"><path d="M21.255-.002l2.88 6.9 8.412 1.335.664 12.458-4.427 17.8-2.878-.22 2.8-11.847-2.99-.084-4.676 12.6-3.544-.446 4.4-12.736-3.072-.584-5.978 13.543-4.428-.445 6.088-14.1-2.1-1.25-7.528 12.012-3.764-.445L12.4 12.9l-1.107-1.78L.665 15.57 0 13.124l8.635-7.786zm162.49 0l-2.88 6.9-8.412 1.335-.664 12.458 4.427 17.8 2.878-.22-2.8-11.847 2.99-.084 4.676 12.6 3.544-.446-4.4-12.736 3.072-.584 5.978 13.543 4.428-.445-6.088-14.1 2.1-1.25 7.528 12.012 3.764-.445L192.6 12.9l1.107-1.78 10.628 4.45.665-2.447-8.635-7.786z"/></svg>
+                  <svg data-position="hands" style={{ position: 'absolute', left: '50%', marginLeft: '-102.5px', top: '224px', fill: currentStates.some(s => s.bodyPart === 'hands') ? '#ff5733' : '#57c9d5' }} xmlns="http://www.w3.org/2000/svg" width="205" height="38.938" viewBox="0 0 205 38.938"><path d="M21.255-.002l2.88 6.9 8.412 1.335.664 12.458-4.427 17.8-2.878-.22 2.8-11.847-2.99-.084-4.676 12.6-3.544-.446 4.4-12.736-3.072-.584-5.978 13.543-4.428-.445 6.088-14.1-2.1-1.25-7.528 12.012-3.764-.445L12.4 12.9l-1.107-1.78L.665 15.57 0 13.124l8.635-7.786zm162.49 0l-2.88 6.9-8.412 1.335-.664 12.458 4.427 17.8 2.878-.22-2.8-11.847 2.99-.084 4.676 12.6 3.544-.446-4.4-12.736 3.072-.584 5.978 13.543 4.428-.445-6.088-14.1 2.1-1.25 7.528 12.012 3.764-.445L192.6 12.9l1.107-1.78 10.628 4.45.665-2.447-8.635-7.786z"/></svg>
                 </div>
                 <div className="absolute top-4 left-4 right-4 bg-blue-600 text-white font-bold border border-blue-800 rounded p-2 text-center shadow-lg">
                   ⚠️ CONTROL CENTER: Brain &amp; Nervous System ⚠️
@@ -416,23 +460,25 @@
               <div className="w-1/4 pl-4">
                 <h2 className="text-xl font-bold text-green-600 mb-4 text-center">EFFECTORS</h2>
                 <div className="space-y-4">
-                  {Array.from(new Set(states.map(s=>s.effector))).map(eff=>{
-                    const info=states.find(s=>s.effector===eff);
-                    const active=activeEffectors.includes(eff);
-                    const shouldHighlight=score<5&&currentStates.some(s=>s.effector===eff&&responseNeeded[s.id]);
-                    const canOff=currentStates.some(s=>s.effector===eff&&homeostasisRestored[s.id]);
-                    const btnText=active
+                  {Array.from(new Set(states.map(s => s.effector))).map(eff => {
+                    const info = states.find(s => s.effector === eff);
+                    const active = activeEffectors.includes(eff);
+                    const shouldHighlight = score < 5 && currentStates.some(s => s.effector === eff && responseNeeded[s.id]);
+                    const canOff = currentStates.some(s => s.effector === eff && homeostasisRestored[s.id]);
+                    const btnText = active
                       ? canOff
-                        ? info.restoreMessage.replace('!','')
+                        ? info.restoreMessage.replace('!', '')
                         : info.effectorName
                       : info.effectorName;
                     return (
                       <div key={eff} className="relative">
-                        <div className={`h-1 absolute top-1/2 left-0 w-16 transform -translate-x-16 ${
-                          activeSensors.includes(info.sensor)?'bg-red-500':'bg-gray-300'
-                        }`}></div>
+                        <div
+                          className={`h-1 absolute top-1/2 left-0 w-16 transform -translate-x-16 ${
+                            activeSensors.includes(info.sensor) ? 'bg-red-500' : 'bg-gray-300'
+                          }`}
+                        ></div>
                         <button
-                          onClick={()=>handleEffectorToggle(eff)}
+                          onClick={() => handleEffectorToggle(eff)}
                           disabled={!gameActive}
                           className={`border-2 rounded-lg p-3 text-center w-full transform transition-all duration-300 ${
                             active
@@ -440,8 +486,8 @@
                                 ? 'bg-red-500 text-white border-red-700 font-bold shadow-lg scale-110'
                                 : 'bg-green-500 text-white border-green-700 font-bold shadow-lg scale-110'
                               : shouldHighlight
-                                ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-500 font-bold shadow'
-                                : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                              ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-500 font-bold shadow'
+                              : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
                           }`}
                         >
                           {btnText}
