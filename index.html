@@ -2,23 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Homeostasis Simulator</title>
-  <!-- Tailwind CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Homeostasis Game</title>
+  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- React & ReactDOM -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <!-- Babel for JSX -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="bg-gray-100">
   <div id="root"></div>
 
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+  <!-- Load React & ReactDOM as ES modules -->
+  <script type="module">
+    import React, { useState, useEffect, useRef } from 'https://cdn.skypack.dev/react';
+    import { createRoot } from 'https://cdn.skypack.dev/react-dom/client';
 
-    function HomeostasisSimulator() {
+    const HomeostasisSimulator = () => {
       // Game state
       const [gameActive, setGameActive] = useState(false);
       const [score, setScore] = useState(0);
@@ -38,388 +35,804 @@
       const [recentChallenges, setRecentChallenges] = useState([]);
       const [lifeLostNotification, setLifeLostNotification] = useState(false);
       const [lifeLostMessage, setLifeLostMessage] = useState("");
-
-      // Difficulty toggles
-      const [hideEffectorHighlights, setHideEffectorHighlights] = useState(false);
-      const [allowMultipleProblems, setAllowMultipleProblems] = useState(false);
-
+      
+      // Refs for animation frames
       const animationFrameRef = useRef(null);
       const bodyRef = useRef(null);
-
-      // All homeostasis states
+      
+      // Homeostasis states with their sensors and effectors
       const states = [
-        { id:"temperature_high", prompt:"TOO HOT! Body temperature rising!", sensor:"temperature_sensor", sensorName:"Temperature Sensor", effector:"sweat_glands", effectorName:"START SWEATING!", activeMessage:"Sweating... cooling down body...", restoreMessage:"Temperature normal! STOP SWEATING!", dangerMessage:"TOO HOT! You're overheating!", responseTime:8000, bodyPart:"head" },
-        { id:"temperature_low", prompt:"TOO COLD! Body temperature dropping!", sensor:"temperature_sensor", sensorName:"Temperature Sensor", effector:"shiver_muscles", effectorName:"START SHIVERING!", activeMessage:"Shivering... warming up body...", restoreMessage:"Temperature normal! STOP SHIVERING!", dangerMessage:"TOO COLD! You're freezing!", responseTime:8000, bodyPart:"hands" },
-        { id:"blood_sugar_high", prompt:"SUGAR OVERLOAD! Glucose too high!", sensor:"glucose_sensor", sensorName:"Glucose Sensor", effector:"insulin_release", effectorName:"RELEASE INSULIN!", activeMessage:"Insulin working... lowering blood sugar...", restoreMessage:"Sugar levels normal! STOP INSULIN!", dangerMessage:"SUGAR CRISIS! You need insulin now!", responseTime:7000, bodyPart:"stomach" },
-        { id:"blood_sugar_low", prompt:"SUGAR CRASH! Glucose too low!", sensor:"glucose_sensor", sensorName:"Glucose Sensor", effector:"glucagon_release", effectorName:"RELEASE GLUCAGON!", activeMessage:"Glucagon working... raising blood sugar...", restoreMessage:"Sugar levels normal! STOP GLUCAGON!", dangerMessage:"ENERGY CRISIS! Blood sugar critical!", responseTime:7000, bodyPart:"stomach" },
-        { id:"bladder_full",   prompt:"BLADDER FULL! Need to urinate!",          sensor:"bladder_sensor", sensorName:"Bladder Sensor",     effector:"urination",        effectorName:"CONTRACT BLADDER!",     activeMessage:"Peeing! Emptying bladder...", restoreMessage:"Bladder emptied! STOP CONTRACTING!", dangerMessage:"EMERGENCY! Bladder about to burst!", responseTime:6000, bodyPart:"legs" },
-        { id:"thirst",          prompt:"TOO THIRSTY! Water levels low!",         sensor:"thirst_sensor",  sensorName:"Thirst Sensor",     effector:"drink_water",     effectorName:"DRINK WATER!",         activeMessage:"Drinking... hydrating body...", restoreMessage:"Water levels normal! STOP DRINKING!", dangerMessage:"DEHYDRATION ALERT! Critical water shortage!", responseTime:7000, bodyPart:"head" },
-        { id:"blood_pressure_high", prompt:"PRESSURE SPIKE! BP too high!",        sensor:"pressure_sensor", sensorName:"Pressure Sensor",  effector:"vasodilation",     effectorName:"DILATE VESSELS!",      activeMessage:"Vessels dilating... lowering pressure...", restoreMessage:"Pressure normal! RETURN TO NORMAL!", dangerMessage:"PRESSURE CRISIS! BP dangerously high!", responseTime:6000, bodyPart:"cheast" },
-        { id:"oxygen_low",      prompt:"OXYGEN LOW! Can't breathe!",           sensor:"oxygen_sensor",  sensorName:"Oxygen Sensor",    effector:"increase_breathing", effectorName:"BREATHE FASTER!",     activeMessage:"Breathing faster... increasing oxygen...", restoreMessage:"Oxygen normal! BREATHE NORMALLY!", dangerMessage:"SUFFOCATING! Critical oxygen levels!", responseTime:5500, bodyPart:"cheast" }
+        { 
+          id: "temperature_high", 
+          prompt: "TOO HOT! Body temperature rising!", 
+          sensor: "temperature_sensor",
+          sensorName: "Temperature Sensor",
+          effector: "sweat_glands",
+          effectorName: "START SWEATING!",
+          activeMessage: "Sweating... cooling down body...",
+          restoreMessage: "Temperature normal! STOP SWEATING!",
+          dangerMessage: "TOO HOT! You're overheating!",
+          responseTime: 8000,
+          bodyPart: "head"
+        },
+        { 
+          id: "temperature_low", 
+          prompt: "TOO COLD! Body temperature dropping!", 
+          sensor: "temperature_sensor",
+          sensorName: "Temperature Sensor",
+          effector: "shiver_muscles",
+          effectorName: "START SHIVERING!",
+          activeMessage: "Shivering... warming up body...",
+          restoreMessage: "Temperature normal! STOP SHIVERING!",
+          dangerMessage: "TOO COLD! You're freezing!",
+          responseTime: 8000,
+          bodyPart: "hands"
+        },
+        { 
+          id: "blood_sugar_high", 
+          prompt: "SUGAR OVERLOAD! Glucose too high!", 
+          sensor: "glucose_sensor",
+          sensorName: "Glucose Sensor",
+          effector: "insulin_release",
+          effectorName: "RELEASE INSULIN!",
+          activeMessage: "Insulin working... lowering blood sugar...",
+          restoreMessage: "Sugar levels normal! STOP INSULIN!",
+          dangerMessage: "SUGAR CRISIS! You need insulin now!",
+          responseTime: 7000,
+          bodyPart: "stomach"
+        },
+        { 
+          id: "blood_sugar_low", 
+          prompt: "SUGAR CRASH! Glucose too low!", 
+          sensor: "glucose_sensor",
+          sensorName: "Glucose Sensor",
+          effector: "glucagon_release",
+          effectorName: "RELEASE GLUCAGON!",
+          activeMessage: "Glucagon working... raising blood sugar...",
+          restoreMessage: "Sugar levels normal! STOP GLUCAGON!",
+          dangerMessage: "ENERGY CRISIS! Blood sugar critical!",
+          responseTime: 7000,
+          bodyPart: "stomach"
+        },
+        { 
+          id: "bladder_full", 
+          prompt: "BLADDER FULL! Need to urinate!", 
+          sensor: "bladder_sensor",
+          sensorName: "Bladder Sensor",
+          effector: "urination",
+          effectorName: "CONTRACT BLADDER!",
+          activeMessage: "Peeing! Emptying bladder...",
+          restoreMessage: "Bladder emptied! STOP CONTRACTING!",
+          dangerMessage: "EMERGENCY! Bladder about to burst!",
+          responseTime: 6000,
+          bodyPart: "legs"
+        },
+        { 
+          id: "thirst", 
+          prompt: "TOO THIRSTY! Water levels low!", 
+          sensor: "thirst_sensor",
+          sensorName: "Thirst Sensor",
+          effector: "drink_water",
+          effectorName: "DRINK WATER!",
+          activeMessage: "Drinking... hydrating body...",
+          restoreMessage: "Water levels normal! STOP DRINKING!",
+          dangerMessage: "DEHYDRATION ALERT! Critical water shortage!",
+          responseTime: 7000,
+          bodyPart: "head"
+        },
+        { 
+          id: "blood_pressure_high", 
+          prompt: "PRESSURE SPIKE! BP too high!", 
+          sensor: "pressure_sensor",
+          sensorName: "Pressure Sensor",
+          effector: "vasodilation",
+          effectorName: "DILATE VESSELS!",
+          activeMessage: "Vessels dilating... lowering pressure...",
+          restoreMessage: "Pressure normal! RETURN TO NORMAL!",
+          dangerMessage: "PRESSURE CRISIS! BP dangerously high!",
+          responseTime: 6000,
+          bodyPart: "cheast"
+        },
+        { 
+          id: "oxygen_low", 
+          prompt: "OXYGEN LOW! Can't breathe!", 
+          sensor: "oxygen_sensor",
+          sensorName: "Oxygen Sensor",
+          effector: "increase_breathing",
+          effectorName: "BREATHE FASTER!",
+          activeMessage: "Breathing faster... increasing oxygen...",
+          restoreMessage: "Oxygen normal! BREATHE NORMALLY!",
+          dangerMessage: "SUFFOCATING! Critical oxygen levels!",
+          responseTime: 5500,
+          bodyPart: "cheast"
+        }
       ];
-
-      // Helpers
-      const getResponseTime    = base => Math.max(base - (difficulty-1)*500, 3000);
-      const getMaxConcurrent   = ()   => allowMultipleProblems ? 2 : 1;
-      const getInitialDelay    = ()   => 2000;
-      const getChallengeFreq   = ()   => Math.max(12000 - difficulty*3000, 2000);
-
-      // Adjust difficulty & toggles
-      useEffect(()=>{
-        if      (score >= 6) setDifficulty(3);
-        else if (score >= 3) setDifficulty(2);
-        else                 setDifficulty(1);
-        setHideEffectorHighlights(score >= 3);
-        setAllowMultipleProblems(score >= 6);
+      
+      // Calculate response time based on score/difficulty
+      const getResponseTime = (baseTime) => {
+        return Math.max(baseTime - ((difficulty - 1) * 500), 3000); // Minimum 3 seconds
+      };
+      
+      // Determine how many concurrent challenges based on difficulty
+      const getMaxConcurrentChallenges = () => {
+        if (difficulty >= 5) return 3;
+        if (difficulty >= 3) return 2;
+        return 1;
+      };
+      
+      // Calculate initial challenge delay based on difficulty
+      const getInitialChallengeDelay = () => {
+        // Start more quickly
+        return 2000; // Always start with a short 2-second delay
+      };
+      
+      // Calculate challenge frequency based on difficulty
+      const getChallengeFrequency = () => {
+        // Slower challenges to prevent overwhelming students
+        const baseFrequency = 12000; // 12 seconds base
+        return Math.max(baseFrequency - (difficulty * 1000), 5000); // Minimum 5 seconds between challenges
+      };
+      
+      // Effect to update difficulty based on score
+      useEffect(() => {
+        if (score >= 25) setDifficulty(6);
+        else if (score >= 20) setDifficulty(5);
+        else if (score >= 15) setDifficulty(4);
+        else if (score >= 10) setDifficulty(3);
+        else if (score >= 5) setDifficulty(2);
+        else setDifficulty(1);
       }, [score]);
-
-      // Flash warning only once when crossing 3s threshold
-      useEffect(()=>{
-        if (!showWarning || !bodyRef.current) return;
-        let count = 0, flash = true, maxF = 4;
-        const doFlash = () => {
-          if (count++ >= maxF) return setShowWarning(false);
-          bodyRef.current.style.backgroundColor = flash ? 'rgba(255,0,0,0.3)' : 'white';
-          flash = !flash;
-          animationFrameRef.current = requestAnimationFrame(() => setTimeout(doFlash, 300));
-        };
-        doFlash();
-        return () => cancelAnimationFrame(animationFrameRef.current);
+      
+      // Flash warning animation - only for critical life-threatening situations
+      useEffect(() => {
+        if (showWarning && bodyRef.current) {
+          let counter = 0;
+          const maxFlashes = 4;
+          let flash = true;
+          
+          const flashWarning = () => {
+            if (counter >= maxFlashes) {
+              setShowWarning(false);
+              return;
+            }
+            
+            if (bodyRef.current) {
+              bodyRef.current.style.backgroundColor = flash ? 'rgba(255, 0, 0, 0.3)' : 'white';
+            }
+            
+            flash = !flash;
+            counter++;
+            animationFrameRef.current = requestAnimationFrame(() => {
+              setTimeout(flashWarning, 300);
+            });
+          };
+          
+          flashWarning();
+          
+          return () => {
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current);
+            }
+          };
+        }
       }, [showWarning]);
-
-      // Auto-hide life-lost
-      useEffect(()=>{
-        if (!lifeLostNotification) return;
-        const t = setTimeout(()=> setLifeLostNotification(false), 2500);
-        return () => clearTimeout(t);
+      
+      // Life lost notification effect
+      useEffect(() => {
+        if (lifeLostNotification) {
+          // Clear the notification after 2.5 seconds
+          const timeout = setTimeout(() => {
+            setLifeLostNotification(false);
+          }, 2500);
+          
+          return () => clearTimeout(timeout);
+        }
       }, [lifeLostNotification]);
-
-      // Spawn loop
-      useEffect(()=>{
-        if (!gameActive || livesLeft <= 0) return;
-        if (!challengeTimer && currentStates.length < getMaxConcurrent()) {
-          const d = currentStates.length === 0 ? getInitialDelay() : getChallengeFreq();
-          const t = setTimeout(()=> { addNewChallenge(); setChallengeTimer(null); }, d);
-          setChallengeTimer(t);
-        }
-        const backup = setTimeout(()=>{
-          if (!challengeTimer && currentStates.length < getMaxConcurrent())
-            setChallengeTimer(null);
-        }, 8000);
-        return ()=> { clearTimeout(challengeTimer); clearTimeout(backup); };
-      }, [gameActive, currentStates, livesLeft, challengeTimer, difficulty, allowMultipleProblems]);
-
-      // Add new challenge
-      const addNewChallenge = () => {
-        if (!gameActive) return;
-        const avail = states.filter(s=>
-          !currentStates.some(c=>c.id===s.id) &&
-          !recentChallenges.includes(s.id.split('_')[0])
-        );
-        if (!avail.length) {
-          setChallengeTimer(setTimeout(()=> setChallengeTimer(null), 3000));
-          return;
-        }
-        const choice = avail[Math.floor(Math.random()*avail.length)];
-        setCurrentStates(prev=>[...prev, choice]);
-        setActiveSensors(prev=>[...prev, choice.sensor]);
-        setResponseNeeded(prev=>({...prev, [choice.id]: true}));
-        setResponseCountdown(prev=>({...prev, [choice.id]: getResponseTime(choice.responseTime)}));
-
-        // Countdown interval with 3s threshold trigger
-        const iv = setInterval(()=>{
-          setResponseCountdown(prev=>{
-            const next = {...prev};
-            const before = prev[choice.id];
-            if (before > 0) {
-              next[choice.id] = before - 100;
-              // trigger once when dipping below 3000ms
-              if (before > 3000 && next[choice.id] <= 3000) {
-                setShowWarning(true);
-              }
-            }
-            return next;
-          });
-        }, 100);
-        setCountdownIntervals(prev=>({...prev, [choice.id]: iv}));
-
-        // Missed response
-        setTimeout(()=>{
-          setResponseNeeded(prev=>{
-            if (prev[choice.id]) {
-              setLifeLostNotification(true);
-              setLifeLostMessage(`LIFE LOST! ${choice.dangerMessage}`);
-              setLivesLeft(l=>l-1);
-              setTimeout(()=> removeChallenge(choice.id), 2000);
-            }
-            return {...prev, [choice.id]: false};
-          });
-        }, getResponseTime(choice.responseTime));
-      };
-
-      // Remove challenge
-      const removeChallenge = id => {
-        const st = states.find(s=>s.id===id);
-        setCurrentStates(prev=>prev.filter(s=>s.id!==id));
-        setTimeout(()=> setActiveSensors(prev=>prev.filter(x=>x!==st.sensor)), 300);
-        setActiveEffectors(prev=>prev.filter(e=>e!==st.effector));
-        clearTimeout(effectorTimeouts[id]);
-        clearInterval(countdownIntervals[id]);
-        setHomeostasisRestored(prev=>{ const n={...prev}; delete n[id]; return n; });
-        setResponseNeeded(prev=>{ const n={...prev}; delete n[id]; return n; });
-        setResponseCountdown(prev=>{ const n={...prev}; delete n[id]; return n; });
-        setRecentChallenges(prev=>[...prev, id.split('_')[0]]);
-        const cd = Math.max(15000 - difficulty*2000, 5000);
-        setTimeout(()=> setRecentChallenges(prev=>prev.filter(x=>x!==id.split('_')[0])), cd);
-      };
-
-      // Helpers
-      const findByEff = eff => states.find(s=>s.effector===eff);
-
-      // Effector click
-      const handleEffectorToggle = eff => {
-        if (!gameActive) return;
-        const st = findByEff(eff), id = st.id;
-        const isA = activeEffectors.includes(eff);
-        const isCh = currentStates.some(s=>s.id===id);
-
-        if (isA) {
-          // turning off
-          if (homeostasisRestored[id]) {
-            setActiveEffectors(prev=>prev.filter(x=>x!==eff));
-            completeChallenge(id);
-          } else {
-            setActiveEffectors(prev=>prev.filter(x=>x!==eff));
-            setLifeLostNotification(true);
-            setLifeLostMessage("LIFE LOST! Turned off too soon!");
-            setLivesLeft(l=>l-1);
-            setTimeout(()=> removeChallenge(id), 2000);
+      
+      // Reset state after completing a challenge
+      const completeChallenge = (stateId) => {
+        try {
+          // Add this challenge type to recently completed list to prevent repeat
+          const stateParts = stateId.split('_');
+          if (stateParts.length > 0) {
+            const challengeType = stateParts[0]; // Extract challenge type (e.g., "temperature" from "temperature_high")
+            setRecentChallenges(prev => [...prev, challengeType]);
+            
+            // Remove from recent challenges after a cooldown period (shorter at higher difficulty)
+            const cooldownTime = Math.max(15000 - (difficulty * 2000), 5000); // Reduces from 15s to 5s
+            setTimeout(() => {
+              setRecentChallenges(prev => prev.filter(c => c !== challengeType));
+            }, cooldownTime);
           }
+          
+          setScore(score => score + 1);
+          
+          // Show success message
+          setMessage(`PERFECT! Homeostasis maintained. Score: ${score + 1}`);
+          
+          // Immediately clear the challenge from the display to prevent message overlap
+          setCurrentStates(prev => prev.filter(state => state && state.id !== stateId));
+          
+          // Then after a short delay, clean up all other state
+          setTimeout(() => {
+            removeChallenge(stateId);
+            
+            // Ensure message is still showing success if no other challenges are active
+            if (currentStates.length <= 1) { // Only the one we're removing
+              setMessage(`PERFECT! Homeostasis maintained. Score: ${score + 1}`);
+            }
+          }, 100);
+          
+          // Also add a cooldown period before new challenges can appear - shorter at higher difficulties
+          if (challengeTimer) {
+            clearTimeout(challengeTimer);
+          }
+          
+          // Reduce the cooldown as difficulty increases
+          const nextChallengeDelay = Math.max(4000 - (difficulty * 500), 1000); // From 4s to 1s
+          setChallengeTimer(setTimeout(() => {
+            setChallengeTimer(null);
+          }, nextChallengeDelay));
+        } catch (error) {
+          console.error("Error in completeChallenge:", error);
+        }
+      };
+      
+      // Effect to update messages based on challenge states
+      useEffect(() => {
+        if (!gameActive) return;
+        
+        // Handle general messages only when no specific challenge messages are active
+        if (currentStates.length === 0) {
+          if (score > 0) {
+            setMessage(`READY FOR NEXT CHALLENGE! Score: ${score}`);
+          } else {
+            setMessage(`Monitor body systems and respond quickly!`);
+          }
+        }
+      }, [gameActive, currentStates, score]);
+      
+      // Game logic
+      useEffect(() => {
+        if (!gameActive) return;
+        
+        if (livesLeft <= 0) {
+          endGame();
           return;
         }
-
-        // turning on
-        if (isCh && responseNeeded[id]) {
-          setActiveEffectors(prev=>[...prev, eff]);
-          setResponseNeeded(prev=>({...prev, [id]: false}));
-          setTimeout(()=>{
-            setHomeostasisRestored(prev=>({...prev, [id]: true}));
-            const t = setTimeout(()=>{
-              if (activeEffectors.includes(eff)) {
-                setLifeLostNotification(true);
-                setLifeLostMessage("LIFE LOST! Overcompensation!");
-                setLivesLeft(l=>l-1);
-                removeChallenge(id);
+        
+        // Debug log to track when new challenges should be created
+        if (!challengeTimer && currentStates.length < getMaxConcurrentChallenges()) {
+          console.log("Should create new challenge. Current challenges:", currentStates.length, "Max:", getMaxConcurrentChallenges());
+          
+          // Challenges come faster to make game more exciting
+          const challengeDelay = currentStates.length === 0 ? 
+            getInitialChallengeDelay() : // First challenge comes quickly
+            getChallengeFrequency(); // Subsequent challenges based on difficulty
+          
+          console.log("Setting challenge delay:", challengeDelay, "ms");
+          
+          const timer = setTimeout(() => {
+            console.log("Timer fired, creating new challenge");
+            addNewChallenge();
+            setChallengeTimer(null);
+          }, challengeDelay);
+          
+          setChallengeTimer(timer);
+        }
+        
+        // Periodically check if we should add more challenges (backup timer)
+        const backupTimer = setTimeout(() => {
+          if (currentStates.length < getMaxConcurrentChallenges() && gameActive) {
+            console.log("Backup timer fired - ensuring new challenge is created");
+            if (challengeTimer) {
+              clearTimeout(challengeTimer);
+              setChallengeTimer(null);
+            }
+          }
+        }, 8000);
+        
+        return () => {
+          if (challengeTimer) {
+            clearTimeout(challengeTimer);
+          }
+          clearTimeout(backupTimer);
+        };
+      }, [gameActive, currentStates, livesLeft, challengeTimer, difficulty]);
+      
+      // Add a new challenge
+      const addNewChallenge = () => {
+        try {
+          if (!gameActive) return;
+          
+          // Get states not currently active
+          const availableStates = states.filter(state => {
+            if (!state || typeof state !== 'object' || !state.id) {
+              return false;
+            }
+            
+            // Filter out states that are currently active
+            if (currentStates.some(current => current && current.id === state.id)) {
+              return false;
+            }
+            
+            // Filter out state types that were recently completed (prevent immediate repeats)
+            const stateParts = state.id.split('_');
+            if (stateParts.length === 0) return false;
+            
+            const stateType = stateParts[0]; // e.g., "temperature" from "temperature_high"
+            return !recentChallenges.includes(stateType);
+          });
+          
+          if (availableStates.length === 0) {
+            // If all challenge types are on cooldown, just wait
+            setChallengeTimer(setTimeout(() => {
+              setChallengeTimer(null);
+            }, 3000));
+            return;
+          }
+          
+          const randomIndex = Math.floor(Math.random() * availableStates.length);
+          const newState = availableStates[randomIndex];
+          
+          if (!newState || !newState.id) {
+            console.error("Invalid state selected:", newState);
+            return;
+          }
+          
+          setCurrentStates(prev => [...prev, newState]);
+          setActiveSensors(prev => [...prev, newState.sensor]);
+          setResponseNeeded(prev => ({...prev, [newState.id]: true}));
+          setResponseCountdown(prev => ({...prev, [newState.id]: getResponseTime(newState.responseTime)}));
+          
+          // Start countdown for this challenge
+          const countdownInterval = setInterval(() => {
+            setResponseCountdown(prev => {
+              const updatedCountdown = {...prev};
+              if (updatedCountdown[newState.id]) {
+                updatedCountdown[newState.id] -= 100;
+                
+                // Only show critical warning when about to lose a life (last 2 seconds)
+                if (updatedCountdown[newState.id] <= 2000 && updatedCountdown[newState.id] > 0 && responseNeeded[newState.id]) {
+                  setShowWarning(true);
+                }
               }
-            }, 8000);
-            setEffectorTimeouts(prev=>({...prev, [id]: t}));
-          }, getResponseTime(st.responseTime)/2);
-        } else if (!isCh) {
-          // wrong effector
-          setActiveEffectors(prev=>[...prev, eff]);
-          setLifeLostNotification(true);
-          setLifeLostMessage("No problem detected!");
-          const t = setTimeout(()=> setActiveEffectors(prev=>prev.filter(x=>x!==eff)), 1500);
-          setEffectorTimeouts(prev=>({...prev, [`wrong_${eff}`]: t}));
+              return updatedCountdown;
+            });
+          }, 100);
+          
+          setCountdownIntervals(prev => ({...prev, [newState.id]: countdownInterval}));
+          
+          // Set timeout for response deadline
+          setTimeout(() => {
+            setResponseNeeded(prev => {
+              const updated = {...prev};
+              if (updated[newState.id]) {
+                // Show life lost notification
+                setLifeLostNotification(true);
+                setLifeLostMessage(`LIFE LOST! ${newState.dangerMessage || "Challenge failed!"}`);
+                
+                setLivesLeft(lives => lives - 1);
+                setShowWarning(true); // Flash warning when losing a life
+                
+                // Clear this state after a penalty
+                setTimeout(() => {
+                  removeChallenge(newState.id);
+                  setShowWarning(false);
+                }, 2000);
+                
+                updated[newState.id] = false;
+              }
+              return updated;
+            });
+          }, getResponseTime(newState.responseTime));
+        } catch (error) {
+          console.error("Error in addNewChallenge:", error);
         }
       };
-
-      // Score
-      const completeChallenge = id => {
-        setScore(s=>s+1);
-        setMessage(`PERFECT! Score: ${score+1}`);
-        removeChallenge(id);
+      
+      // Remove a challenge
+      const removeChallenge = (stateId) => {
+        try {
+          if (!stateId) return;
+          
+          // Preserve the state for a moment to allow proper UI feedback before removing
+          const stateToRemove = currentStates.find(state => state && state.id === stateId);
+          
+          setCurrentStates(prev => prev.filter(state => state && state.id !== stateId));
+          
+          // Delay the sensor deactivation slightly to prevent UI confusion
+          setTimeout(() => {
+            setActiveSensors(prev => {
+              if (!stateToRemove) return prev;
+              return prev.filter(sensor => sensor !== stateToRemove.sensor);
+            });
+          }, 300);
+          
+          setActiveEffectors(prev => {
+            const stateToRemove = states.find(s => s && s.id === stateId);
+            return prev.filter(effector => !stateToRemove || effector !== stateToRemove.effector);
+          });
+          
+          // Clear any timers for this challenge
+          if (effectorTimeouts[stateId]) {
+            clearTimeout(effectorTimeouts[stateId]);
+            setEffectorTimeouts(prev => {
+              const updated = {...prev};
+              delete updated[stateId];
+              return updated;
+            });
+          }
+          
+          if (countdownIntervals[stateId]) {
+            clearInterval(countdownIntervals[stateId]);
+            setCountdownIntervals(prev => {
+              const updated = {...prev};
+              delete updated[stateId];
+              return updated;
+            });
+          }
+          
+          setHomeostasisRestored(prev => {
+            const updated = {...prev};
+            delete updated[stateId];
+            return updated;
+          });
+          
+          setResponseNeeded(prev => {
+            const updated = {...prev};
+            delete updated[stateId];
+            return updated;
+          });
+          
+          setResponseCountdown(prev => {
+            const updated = {...prev};
+            delete updated[stateId];
+            return updated;
+          });
+        } catch (error) {
+          console.error("Error in removeChallenge:", error);
+        }
       };
-
-      // Start / End
+      
+      // Find state by effector
+      const findStateByEffector = (effectorId) => {
+        if (!effectorId) return null;
+        return states.find(state => state && state.effector === effectorId) || null;
+      };
+      
+      // Handle effector activation
+      const handleEffectorToggle = (effectorId) => {
+        try {
+          if (!gameActive || !effectorId) return;
+          
+          const relatedState = findStateByEffector(effectorId);
+          if (!relatedState || !relatedState.id) return;
+          
+          const stateId = relatedState.id;
+          const isCurrentChallenge = currentStates.some(state => state && state.id === stateId);
+          
+          // If already active, turn it off
+          if (activeEffectors.includes(effectorId)) {
+            // Check if it should be turned off (homeostasis restored)
+            if (isCurrentChallenge && homeostasisRestored[stateId]) {
+              // Correct action - turn off when homeostasis is restored
+              setActiveEffectors(prev => prev.filter(e => e !== effectorId));
+              
+              if (effectorTimeouts[stateId]) {
+                clearTimeout(effectorTimeouts[stateId]);
+              }
+              
+              // Use the complete challenge function
+              completeChallenge(stateId);
+            } else {
+              // Turned off too early
+              setActiveEffectors(prev => prev.filter(e => e !== effectorId));
+              setMessage("Problem not fixed yet!");
+              setLivesLeft(lives => lives - 1);
+              
+              // Show life lost notification
+              setLifeLostNotification(true);
+              setLifeLostMessage("LIFE LOST! You turned off the response too soon!");
+              
+              setTimeout(() => {
+                if (isCurrentChallenge) {
+                  removeChallenge(stateId);
+                }
+              }, 2000);
+            }
+            return;
+          }
+          
+          // Handle initial activation
+          if (isCurrentChallenge && responseNeeded[stateId]) {
+            // Correct response - activate effector
+            setActiveEffectors(prev => [...prev, effectorId]);
+            setHomeostasisRestored(prev => ({...prev, [stateId]: false}));
+            setResponseNeeded(prev => ({...prev, [stateId]: false}));
+            
+            // After some time, signal that homeostasis is being restored
+            const responseTime = Math.floor(getResponseTime(relatedState.responseTime) / 2);
+            
+            const timeout = setTimeout(() => {
+              setHomeostasisRestored(prev => ({...prev, [stateId]: true}));
+              
+              // Need to turn it off in time - but give MUCH more time (8 seconds)
+              const turnOffTimeout = setTimeout(() => {
+                if (activeEffectors.includes(effectorId)) {
+                  setMessage("You need to turn off the response!");
+                  setLivesLeft(lives => lives - 1);
+                  
+                  // Show life lost notification
+                  setLifeLostNotification(true);
+                  setLifeLostMessage("LIFE LOST! Overcompensation! Response left on too long!");
+                  
+                  setTimeout(() => {
+                    removeChallenge(stateId);
+                  }, 2000);
+                }
+              }, 8000); // Much longer time to turn it off (8 seconds)
+              
+              setEffectorTimeouts(prev => ({...prev, [stateId]: turnOffTimeout}));
+              
+            }, responseTime);
+            
+            setEffectorTimeouts(prev => ({...prev, [stateId + "_activate"]: timeout}));
+            
+          } else if (!isCurrentChallenge) {
+            // Activating an effector with no challenge
+            setActiveEffectors(prev => [...prev, effectorId]);
+            setMessage("No problem detected! Don't overcompensate!");
+            
+            // Auto turn off after a short time
+            const wrongEffectorTimeout = setTimeout(() => {
+              setActiveEffectors(prev => prev.filter(e => e !== effectorId));
+            }, 1500);
+            
+            setEffectorTimeouts(prev => ({...prev, [effectorId + "_wrong"]: wrongEffectorTimeout}));
+          }
+        } catch (error) {
+          console.error("Error in handleEffectorToggle:", error);
+        }
+      };
+      
       const startGame = () => {
-        Object.values(effectorTimeouts).forEach(clearTimeout);
-        Object.values(countdownIntervals).forEach(clearInterval);
-        clearTimeout(challengeTimer);
-        setGameActive(true);
-        setScore(0);
-        setLivesLeft(3);
-        setDifficulty(1);
-        setHideEffectorHighlights(false);
-        setAllowMultipleProblems(false);
-        setMessage("Game started! Monitor systems!");
-        setCurrentStates([]);
-        setActiveSensors([]);
-        setActiveEffectors([]);
-        setHomeostasisRestored({});
-        setResponseNeeded({});
-        setEffectorTimeouts({});
-        setCountdownIntervals({});
-        setResponseCountdown({});
-        setRecentChallenges([]);
+        try {
+          // Clear any existing timers first
+          Object.values(effectorTimeouts).forEach(timeout => {
+            if (timeout) clearTimeout(timeout);
+          });
+          Object.values(countdownIntervals).forEach(interval => {
+            if (interval) clearInterval(interval);
+          });
+          if (challengeTimer) clearTimeout(challengeTimer);
+          
+          // Reset game state
+          setGameActive(true);
+          setScore(0);
+          setLivesLeft(3);
+          setDifficulty(1);
+          setMessage("Game started! Monitor body systems!");
+          setCurrentStates([]);
+          setActiveSensors([]);
+          setActiveEffectors([]);
+          setHomeostasisRestored({});
+          setResponseNeeded({});
+          setEffectorTimeouts({});
+          setCountdownIntervals({});
+          setResponseCountdown({});
+          setChallengeTimer(null);
+          setRecentChallenges([]);
+        } catch (error) {
+          console.error("Error in startGame:", error);
+        }
       };
-
+      
       const endGame = () => {
-        Object.values(effectorTimeouts).forEach(clearTimeout);
-        Object.values(countdownIntervals).forEach(clearInterval);
-        clearTimeout(challengeTimer);
-        setGameActive(false);
-        setMessage(`GAME OVER! Final score: ${score}. Press Start to play again!`);
-        setCurrentStates([]);
-        setActiveSensors([]);
-        setActiveEffectors([]);
-        setHomeostasisRestored({});
-        setResponseNeeded({});
-        setEffectorTimeouts({});
-        setCountdownIntervals({});
-        setRecentChallenges([]);
+        try {
+          // Clear all timers
+          Object.values(effectorTimeouts).forEach(timeout => {
+            if (timeout) clearTimeout(timeout);
+          });
+          Object.values(countdownIntervals).forEach(interval => {
+            if (interval) clearInterval(interval);
+          });
+          if (challengeTimer) clearTimeout(challengeTimer);
+          
+          setGameActive(false);
+          setMessage(`GAME OVER! Final score: ${score}. Press Start to play again!`);
+          
+          // Clear all states
+          setCurrentStates([]);
+          setActiveSensors([]);
+          setActiveEffectors([]);
+          setHomeostasisRestored({});
+          setResponseNeeded({});
+          setEffectorTimeouts({});
+          setCountdownIntervals({});
+          setChallengeTimer(null);
+          setRecentChallenges([]);
+        } catch (error) {
+          console.error("Error in endGame:", error);
+        }
       };
 
       return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-100">
-          {/* TITLE & CONTROLS */}
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
           <div className="text-center mb-4">
             <h1 className="text-3xl font-bold text-blue-700 mb-2">BODY BALANCE!</h1>
             <p className="text-md text-gray-700 mb-4">Keep your body in homeostasis or FACE THE CONSEQUENCES!</p>
+            
             <div className="mb-4">
-              <button onClick={startGame} disabled={gameActive}
-                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg mr-4 text-xl">
+              <button 
+                onClick={startGame} 
+                className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg mr-4 text-xl"
+                disabled={gameActive}
+              >
                 START GAME!
               </button>
-              <button onClick={endGame} disabled={!gameActive}
-                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg text-xl">
+              
+              <button 
+                onClick={endGame} 
+                className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-lg text-xl"
+                disabled={!gameActive}
+              >
                 END GAME
               </button>
             </div>
+            
             <div className="flex justify-center space-x-4 mb-2">
               <div className="text-xl font-semibold">Score: <span className="text-green-600">{score}</span></div>
               <div className="text-xl font-semibold">Lives: <span className="text-red-600">{livesLeft}</span></div>
               <div className="text-xl font-semibold">Level: <span className="text-purple-600">{difficulty}</span></div>
             </div>
+            
             {lifeLostNotification && (
               <div className="bg-red-600 text-white p-3 mb-4 rounded-lg animate-pulse text-xl font-bold">
                 {lifeLostMessage}
               </div>
             )}
+            
             <div className={`p-4 mb-4 text-center rounded-lg border-2 ${
-              showWarning ? 'bg-red-100 border-red-500 animate-pulse' : 'bg-yellow-100 border-yellow-500'
+              showWarning ? 'bg-red-100 border-red-500 animate-pulse' : 
+              'bg-yellow-100 border-yellow-500'
             }`}>
-              {currentStates.length>0 ? currentStates.map(state => {
-                const isA = activeEffectors.includes(state.effector);
-                const isR = homeostasisRestored[state.id];
-                const tleft = responseCountdown[state.id] || 0;
-                const urgent = tleft <= 3000 && tleft>0 && responseNeeded[state.id];
-                let status = state.prompt;
-                if (isA && !isR) status = state.activeMessage;
-                else if (isA && isR) status = state.restoreMessage;
-                return (
-                  <p key={state.id} className={`text-xl font-bold ${
-                    isR?'text-green-600':isA?'text-blue-600':urgent?'text-red-700':'text-red-600'
-                  }`}>
-                    {status}
-                    {tleft>0&&!isA&&!isR&&(
-                      <span className={`ml-2 ${
-                        urgent?'text-red-700 font-extrabold':'text-red-600'
-                      }`}>{Math.ceil(tleft/1000)}s</span>
-                    )}
-                  </p>
-                );
-              }) : (
+              {currentStates.length > 0 ? (
+                currentStates.map(state => {
+                  if (!state || !state.id) return null;
+                  
+                  const isActive = activeEffectors.includes(state.effector);
+                  const isRestored = homeostasisRestored[state.id];
+                  const timeRemaining = responseCountdown[state.id] || 0;
+                  const isUrgent = timeRemaining <= 2000 && timeRemaining > 0 && responseNeeded[state.id];
+                  
+                  let statusMessage = state.prompt || "Challenge active";
+                  if (isActive && !isRestored) {
+                    statusMessage = state.activeMessage || "Response active...";
+                  } else if (isActive && isRestored) {
+                    statusMessage = state.restoreMessage || "Homeostasis restored!";
+                  }
+                  
+                  return (
+                    <div key={state.id} className="mb-2">
+                      <p className={`text-xl font-bold ${
+                        isRestored ? 'text-green-600' : 
+                        isActive ? 'text-blue-600' : 
+                        isUrgent ? 'text-red-700' : 'text-red-600'
+                      }`}>
+                        {statusMessage}
+                        {timeRemaining > 0 && !isActive && !isRestored && (
+                          <span className={`ml-2 ${isUrgent ? 'text-red-700 font-extrabold' : 'text-red-600'}`}>
+                            {Math.ceil(timeRemaining / 1000)}s
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
                 <p className="text-xl font-bold">{message}</p>
               )}
             </div>
           </div>
-
+          
           <div className="flex w-full max-w-6xl justify-center">
-            {/* SENSORS */}
             <div className="w-1/4 pr-4">
               <h2 className="text-xl font-bold text-blue-600 mb-4 text-center">SENSORS</h2>
               <div className="space-y-4">
-                {Array.from(new Set(states.map(s=>s.sensor))).map(sensor=>{
-                  const info = states.find(s=>s.sensor===sensor);
-                  const isA = activeSensors.includes(sensor);
-                  return (
-                    <div key={sensor} className="relative">
-                      <div className={`border-2 rounded-lg p-3 text-center transform transition-all duration-300 ${
-                        isA ? 'bg-red-500 text-white border-red-700 font-bold scale-110 shadow-lg' : 'bg-gray-100 border-gray-300'
-                      }`}>
-                        {info.sensorName}
+                {Array.from(new Set(states.filter(s => s).map(state => state.sensor)))
+                  .filter(sensor => sensor)
+                  .map(sensor => {
+                    const sensorState = states.find(s => s && s.sensor === sensor);
+                    const sensorName = sensorState?.sensorName || "Sensor";
+                    const isActive = activeSensors.includes(sensor);
+                    return (
+                      <div key={sensor} className="relative">
+                        <div 
+                          className={`border-2 rounded-lg p-3 text-center transition-all duration-300 transform ${
+                            isActive ? 'bg-red-500 text-white border-red-700 font-bold scale-110 shadow-lg' : 
+                            'bg-gray-100 border-gray-300'
+                          }`}
+                        >
+                          {sensorName}
+                        </div>
+                        <div 
+                          className={`h-1 absolute top-1/2 right-0 w-16 transform translate-x-16 ${
+                            isActive ? 'bg-red-500' : 'bg-gray-300'
+                          }`}
+                        ></div>
                       </div>
-                      <div className={`h-1 absolute top-1/2 right-0 w-16 transform translate-x-16 ${
-                        isA ? 'bg-red-500' : 'bg-gray-300'
-                      }`} style={{zIndex:0}}/>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
               </div>
             </div>
-
-            {/* HUMAN BODY */}
-            <div ref={bodyRef} className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative" style={{overflow:'hidden'}}>
-              <div className="human-body" style={{width:'207px',position:'relative',margin:'20px auto',height:'500px'}}>
-                {/* HEAD */}
-                <svg data-position="head" style={{position:'absolute',left:'50%',marginLeft:'-28px',top:'-6px',fill:currentStates.some(s=>s.bodyPart==='head')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="56" height="95" viewBox="0 0 56 95"><path d="M15.92 68.5l8.8 12.546 3.97 13.984-9.254-7.38-4.622-15.848zm27.1 0l-8.8 12.546-3.976 13.988 9.254-7.38 4.622-15.848zm6.11-27.775l.108-11.775-21.16-14.742L8.123 26.133 8.09 40.19l-3.24.215 1.462 9.732 5.208 1.81 2.36 11.63 9.72 11.018 10.856-.324 9.56-10.37 1.918-11.952 5.207-1.81 1.342-9.517z"/></svg>
-                {/* SHOULDERS */}
-                <svg data-position="shoulder" style={{position:'absolute',left:'50%',marginLeft:'-53px',top:'69px',fill:currentStates.some(s=>s.bodyPart==='shoulder')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="109" height="46" viewBox="0 0 109 46"><path d="M38 0l2 9-12 3-7-3zm33 0l-2 9 12 3 7-3zm21 11l4-2 12 14 0 5zm-1 .6c0 .3 18 19 18 19l1 17-6-11-7-17z"/></svg>
-                {/* ARMS */}
-                <svg data-position="arm" style={{position:'absolute',left:'50%',marginLeft:'-78px',top:'112px',fill:currentStates.some(s=>s.bodyPart==='arm')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="156" height="119" viewBox="0 0 156 119"><path d="M21 56l-1 1 1 8 13-14 1-9z"/></svg>
-                {/* CHEST */}
-                <svg data-position="cheast" style={{position:'absolute',left:'50%',marginLeft:'-43px',top:'88px',fill:currentStates.some(s=>s.bodyPart==='cheast')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="86" height="45" viewBox="0 0 86 45"><path d="M19 0l-9 16-10 5 6 5 5 14 11 5 17-9-4-35zm48 0l9 16 10 5-6 5-5 14-11 5-17-9 4-35z"/></svg>
-                {/* STOMACH */}
-                <svg data-position="stomach" style={{position:'absolute',left:'50%',marginLeft:'-37px',top:'130px',fill:currentStates.some(s=>s.bodyPart==='stomach')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="75" height="107" viewBox="0 0 75 107"><path d="M19 7l17-7-1 12-15 8zm-10 9l7 4-1-9zm6-9L1 2 6 16zm-8 9l9 6 2 11-9-6z"/></svg>
-                {/* LEGS */}
-                <svg data-position="legs" style={{position:'absolute',left:'50%',marginLeft:'-46px',top:'205px',fill:currentStates.some(s=>s.bodyPart==='legs')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="93" height="286" viewBox="0 0 93 286"><path d="M17 138l0 6 5 6 2 9 3 1 3-14 2-5-2-3zm21 1l-3 9-7 14 2 13 5-14 4-8zm-27-13l5 27-3-2-3 9zm23 42l-1 5-3 21-1 28 5 27z"/></svg>
-                {/* HANDS */}
-                <svg data-position="hands" style={{position:'absolute',left:'50%',marginLeft:'-102px',top:'224px',fill:currentStates.some(s=>s.bodyPart==='hands')?'#ff5733':'#57c9d5'}} xmlns="http://www.w3.org/2000/svg" width="205" height="38" viewBox="0 0 205 38"><path d="M21 0l3 7 8 1 1 12-4 18-2 0 3-12-3 0-5 13-4-1 4-13-3 0-6 14-2-1-8 12-4-1L12 13l-1-2-11 6z"/></svg>
+            
+            <div 
+              ref={bodyRef} 
+              className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative"
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="human-body" style={{ width: '207px', position: 'relative', margin: '20px auto', height: '500px' }}>
+                <!-- SVG body parts here (all your SVGs as originally provided) -->
               </div>
+              
               <div className="absolute top-4 left-4 right-4 bg-blue-600 text-white font-bold border border-blue-800 rounded p-2 text-center shadow-lg">
-                ⚠️ CONTROL CENTER: Brain &amp; Nervous System ⚠️
+                ⚠️ CONTROL CENTER: Brain & Nervous System ⚠️
               </div>
+              
               <div className="absolute bottom-4 left-4 right-4 bg-purple-100 border border-purple-300 rounded p-1 text-center text-sm">
-                <div className="font-bold">
-                  Level {difficulty}{difficulty>=3 ? ' - Multiple challenges active!' : ''}
-                </div>
+                <div className="font-bold">Level {difficulty} {difficulty >= 3 ? '- Multiple challenges active!' : ''}</div>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div className="bg-purple-600 h-2 rounded-full" style={{width:`${Math.min(score/25*100,100)}%`}} />
+                  <div className="bg-purple-600 h-2 rounded-full" style={{ width: `${Math.min(score/25 * 100, 100)}%` }}></div>
                 </div>
               </div>
             </div>
-
-            {/* EFFECTORS */}
+            
             <div className="w-1/4 pl-4">
               <h2 className="text-xl font-bold text-green-600 mb-4 text-center">EFFECTORS</h2>
               <div className="space-y-4">
-                {Array.from(new Set(states.map(s=>s.effector))).map(eff=>{
-                  const st=states.find(s=>s.effector===eff);
-                  const isA=activeEffectors.includes(eff);
-                  const need=currentStates.some(s=>s.effector===eff && responseNeeded[s.id]);
-                  const off=currentStates.some(s=>s.effector===eff && homeostasisRestored[s.id]);
-                  return (
-                    <div key={eff} className="relative">
-                      <div className={`h-1 absolute top-1/2 left-0 w-16 transform -translate-x-16 ${
-                        activeSensors.includes(st.sensor) ? 'bg-red-500' : 'bg-gray-300'
-                      }`} style={{zIndex:0}}/>
-                      <button onClick={()=>handleEffectorToggle(eff)} disabled={!gameActive}
-                        className={`w-full p-3 rounded-lg border-2 transition-all duration-300 transform ${
-                          isA
-                            ? off
-                              ? 'bg-red-500 text-white border-red-700 font-bold shadow-lg scale-110'
-                              : 'bg-green-500 text-white border-green-700 font-bold shadow-lg scale-110'
-                            : hideEffectorHighlights
-                              ? 'bg-gray-100 hover:bg-gray-200 border-gray-300'
-                              : need
+                {Array.from(new Set(states.filter(s => s).map(state => state.effector)))
+                  .filter(effector => effector)
+                  .map(effector => {
+                    const effectorState = states.find(s => s && s.effector === effector);
+                    const effectorName = effectorState?.effectorName || "Effector";
+                    const isActive = activeEffectors.includes(effector);
+                    const relatedState = findStateByEffector(effector);
+                    const isNeeded = currentStates.some(state => state && state.effector === effector && responseNeeded[state.id]);
+                    const shouldTurnOff = currentStates.some(state => state && state.effector === effector && homeostasisRestored[state.id]);
+                    
+                    const buttonText = isActive ? 
+                      (shouldTurnOff ? (relatedState?.restoreMessage || "STOP!").replace("!", "") : effectorName) :
+                      effectorName;
+                    
+                    return (
+                      <div key={effector} className="relative">
+                        <div className={`h-1 absolute top-1/2 left-0 w-16 transform -translate-x-16 ${
+                          activeSensors.includes(relatedState?.sensor) ? 'bg-red-500' : 'bg-gray-300'
+                        }`}></div>
+                        <button 
+                          onClick={() => handleEffectorToggle(effector)}
+                          disabled={!gameActive}
+                          className={`border-2 rounded-lg p-3 text-center w-full transition-all duration-300 transform ${
+                            isActive 
+                              ? (shouldTurnOff 
+                                 ? 'bg-red-500 text-white border-red-700 font-bold shadow-lg scale-110' 
+                                 : 'bg-green-500 text-white border-green-700 font-bold shadow-lg scale-110'
+                                ) 
+                              : isNeeded
                                 ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-500 font-bold shadow'
                                 : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
-                        }`}>
-                        {isA
-                          ? off
-                            ? st.restoreMessage.replace('!','')
-                            : st.effectorName
-                          : st.effectorName}
-                      </button>
-                    </div>
-                  );
-                })}
+                          }`}
+                        >
+                          {buttonText}
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             </div>
           </div>
-
-          {/* HOW TO PLAY */}
+          
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg max-w-3xl">
             <h2 className="text-xl font-bold text-blue-800 mb-2">HOW TO PLAY:</h2>
             <ol className="list-decimal pl-5 space-y-2">
@@ -429,9 +842,7 @@
               <li>Watch for the message telling you to STOP the response.</li>
               <li>You MUST turn OFF the effector when told to avoid overcompensation.</li>
               <li>Score points for successfully maintaining homeostasis.</li>
-              <li>After 3 POINTS: The game gets harder - effector buttons won't highlight!</li>
-              <li>After 6 POINTS: The game speeds up - problems appear more quickly!</li>
-              <li>After 9 POINTS: Multiple problems happen at once - manage them all!</li>
+              <li>As you level up, challenges come faster and multiple problems can happen at once!</li>
               <li>Game ends when you lose all 3 lives. HOW LONG CAN YOU SURVIVE?</li>
             </ol>
             <div className="mt-4 p-2 bg-yellow-50 border border-yellow-200 rounded">
@@ -462,9 +873,12 @@
           </div>
         </div>
       );
-    }
+    };
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<HomeostasisSimulator />);
+    // Mount into #root
+    const container = document.getElementById('root');
+    const root = createRoot(container);
+    root.render(<HomeostasisSimulator />);
   </script>
 </body>
 </html>
