@@ -20,7 +20,6 @@
     const { useState, useEffect, useRef } = React;
 
     const HomeostasisSimulator = () => {
-      // Game state
       const [gameActive, setGameActive] = useState(false);
       const [score, setScore] = useState(0);
       const [livesLeft, setLivesLeft] = useState(3);
@@ -152,9 +151,6 @@
         }
       ];
 
-      const getResponseTime = baseTime =>
-        Math.max(baseTime - ((difficulty - 1) * 500), 3000);
-
       // 5 points per level
       useEffect(() => {
         if (score >= 25) setDifficulty(6);
@@ -170,43 +166,53 @@
         }
       }, [score]);
 
-      // Flash only when under 2s
+      // flash only when <2s remaining
       useEffect(() => {
-        if (showWarning && bodyRef.current) {
-          let count = 0, flash = true;
-          const maxFlashes = 4;
-          const doFlash = () => {
-            if (count >= maxFlashes) {
-              setShowWarning(false);
-              return;
-            }
-            bodyRef.current.style.backgroundColor = flash ? 'rgba(255,0,0,0.3)' : 'white';
-            flash = !flash;
-            count++;
-            animationFrameRef.current = requestAnimationFrame(() =>
-              setTimeout(doFlash, 300)
-            );
-          };
-          doFlash();
-          return () => cancelAnimationFrame(animationFrameRef.current);
-        }
+        if (!showWarning || !bodyRef.current) return;
+        let count = 0, flash = true;
+        const maxFlashes = 4;
+        const doFlash = () => {
+          if (count >= maxFlashes) {
+            setShowWarning(false);
+            return;
+          }
+          bodyRef.current.style.backgroundColor = flash ? 'rgba(255,0,0,0.3)' : 'white';
+          flash = !flash;
+          count++;
+          animationFrameRef.current = requestAnimationFrame(() =>
+            setTimeout(doFlash, 300)
+          );
+        };
+        doFlash();
+        return () => cancelAnimationFrame(animationFrameRef.current);
       }, [showWarning]);
 
       useEffect(() => {
-        if (lifeLostNotification) {
-          const t = setTimeout(() => setLifeLostNotification(false), 2500);
-          return () => clearTimeout(t);
-        }
+        if (!lifeLostNotification) return;
+        const t = setTimeout(() => setLifeLostNotification(false), 2500);
+        return () => clearTimeout(t);
       }, [lifeLostNotification]);
 
-      // Spawn next challenge 2s after previous completes
+      // initial spawn when gameActive flips true
+      useEffect(() => {
+        if (!gameActive) return;
+        const timer = setTimeout(() => addNewChallenge(), 2000);
+        return () => clearTimeout(timer);
+      }, [gameActive]);
+
+      // main loop: ensure concurrency but we drive next spawns manually
+      // responseTime calculation
+      const getResponseTime = baseTime =>
+        Math.max(baseTime - ((difficulty - 1) * 500), 3000);
+
+      // spawn subsequent challenge 2s after completion/miss
       const scheduleNext = () => {
         setTimeout(() => addNewChallenge(), 2000);
       };
 
+      // add challenge (no longer checks gameActive guard)
       const addNewChallenge = () => {
-        if (!gameActive) return;
-        // pick a new state not active and not recent
+        // filter out active & recent
         const available = states.filter(s => {
           if (currentStates.some(c => c.id === s.id)) return false;
           const type = s.id.split('_')[0];
@@ -220,10 +226,10 @@
         setResponseNeeded(prev => ({ ...prev, [newState.id]: true }));
         setResponseCountdown(prev => ({ ...prev, [newState.id]: getResponseTime(newState.responseTime) }));
 
-        // countdown interval
+        // countdown
         const ci = setInterval(() => {
           setResponseCountdown(prev => {
-            const u = { ...prev };
+            const u = {...prev};
             if (u[newState.id]) {
               u[newState.id] -= 100;
               if (u[newState.id] <= 2000 && u[newState.id] > 0 && responseNeeded[newState.id]) {
@@ -236,7 +242,7 @@
         setCountdownIntervals(prev => ({ ...prev, [newState.id]: ci }));
 
         // deadline
-        setTimeout(() => {
+        const dl = setTimeout(() => {
           setResponseNeeded(prev => {
             const u = { ...prev };
             if (u[newState.id]) {
@@ -250,10 +256,11 @@
             return u;
           });
         }, getResponseTime(newState.responseTime));
+        setEffectorTimeouts(prev => ({ ...prev, [newState.id + "_deadline"]: dl }));
       };
 
       const completeChallenge = id => {
-        // cooldown
+        // cooldown & point
         const type = id.split('_')[0];
         setRecentChallenges(prev => [...prev, type]);
         const cd = Math.max(15000 - (difficulty * 2000), 5000);
@@ -275,11 +282,11 @@
           const ss = states.find(s => s.id === id);
           return !ss || e !== ss.effector;
         }));
-        if (effectorTimeouts[id]) clearTimeout(effectorTimeouts[id]);
+        if (effectorTimeouts[id + "_deadline"]) clearTimeout(effectorTimeouts[id + "_deadline"]);
         if (countdownIntervals[id]) clearInterval(countdownIntervals[id]);
-        setHomeostasisRestored(prev => { const o = { ...prev }; delete o[id]; return o; });
-        setResponseNeeded(prev => { const o = { ...prev }; delete o[id]; return o; });
-        setResponseCountdown(prev => { const o = { ...prev }; delete o[id]; return o; });
+        setHomeostasisRestored(prev => { const o = {...prev}; delete o[id]; return o; });
+        setResponseNeeded(prev => { const o = {...prev}; delete o[id]; return o; });
+        setResponseCountdown(prev => { const o = {...prev}; delete o[id]; return o; });
       };
 
       const findStateByEffector = eid => states.find(s => s.effector === eid) || null;
@@ -291,7 +298,7 @@
         const sid = rs.id;
         const isCurr = currentStates.some(s => s.id === sid);
 
-        // turning off
+        // turning OFF
         if (activeEffectors.includes(eid)) {
           if (isCurr && homeostasisRestored[sid]) {
             setActiveEffectors(prev => prev.filter(x => x !== eid));
@@ -308,7 +315,7 @@
           return;
         }
 
-        // correct initial activation
+        // correct activation
         if (isCurr && responseNeeded[sid]) {
           setActiveEffectors(prev => [...prev, eid]);
           setHomeostasisRestored(prev => ({ ...prev, [sid]: false }));
@@ -326,11 +333,11 @@
                 scheduleNext();
               }
             }, 8000);
-            setEffectorTimeouts(prev => ({ ...prev, [sid]: t2 }));
+            setEffectorTimeouts(prev => ({ ...prev, [sid + "_over"]: t2 }));
           }, half);
           setEffectorTimeouts(prev => ({ ...prev, [sid + "_act"]: t1 }));
         }
-        // wrong effector
+        // wrong
         else {
           setActiveEffectors(prev => [...prev, eid]);
           setMessage("Wrong effector! You lose a life!");
@@ -363,8 +370,6 @@
         setResponseCountdown({});
         setRecentChallenges([]);
         setMemoryModePopupShown(false);
-        // first challenge after 2s
-        setTimeout(() => addNewChallenge(), 2000);
       };
       const endGame = () => {
         Object.values(effectorTimeouts).forEach(t => clearTimeout(t));
@@ -519,7 +524,7 @@
               {/* Body */}
               <div className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative z-10" style={{ overflow: 'hidden' }}>
                 <div className="human-body" style={{ width: '207px', position: 'relative', margin: '20px auto', height: '500px' }}>
-                  {/* Insert all your SVG body parts here exactly as before */}
+                  <!-- your SVGs here -->
                 </div>
                 <div className="absolute top-4 left-4 right-4 bg-blue-600 text-white font-bold border border-blue-800 rounded p-2 text-center shadow-lg">
                   ⚠️ CONTROL CENTER: Brain &amp; Nervous System ⚠️
