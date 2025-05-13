@@ -31,7 +31,6 @@
       const [message, setMessage] = useState("Press Start to begin!");
       const [effectorTimeouts, setEffectorTimeouts] = useState({});
       const [responseNeeded, setResponseNeeded] = useState({});
-      const [challengeTimer, setChallengeTimer] = useState(null);
       const [responseCountdown, setResponseCountdown] = useState({});
       const [countdownIntervals, setCountdownIntervals] = useState({});
       const [difficulty, setDifficulty] = useState(1);
@@ -156,19 +155,7 @@
       const getResponseTime = baseTime =>
         Math.max(baseTime - ((difficulty - 1) * 500), 3000);
 
-      const getMaxConcurrentChallenges = () => {
-        if (difficulty >= 4) return 3;
-        if (difficulty >= 2) return 2;
-        return 1;
-      };
-
-      const getInitialChallengeDelay = () => 2000;
-      const getChallengeFrequency = () => {
-        const base = 12000;
-        return Math.max(base - (difficulty * 1000), 5000);
-      };
-
-      // Increase difficulty over score, show memory-mode popup at 5 points
+      // 5 points per level
       useEffect(() => {
         if (score >= 25) setDifficulty(6);
         else if (score >= 20) setDifficulty(5);
@@ -183,7 +170,7 @@
         }
       }, [score]);
 
-      // Flash warning only when <2s remaining
+      // Flash only when under 2s
       useEffect(() => {
         if (showWarning && bodyRef.current) {
           let count = 0, flash = true;
@@ -212,61 +199,31 @@
         }
       }, [lifeLostNotification]);
 
-      // General message when no active challenges
-      useEffect(() => {
-        if (!gameActive) return;
-        if (!currentStates.length) {
-          setMessage(score > 0
-            ? `READY FOR NEXT CHALLENGE! Score: ${score}`
-            : `Monitor body systems and respond quickly!`);
-        }
-      }, [gameActive, currentStates, score]);
-
-      // Main loop: spawn challenges
-      useEffect(() => {
-        if (!gameActive) return;
-        if (livesLeft <= 0) { endGame(); return; }
-        if (!challengeTimer && currentStates.length < getMaxConcurrentChallenges()) {
-          const delay = currentStates.length === 0
-            ? getInitialChallengeDelay()
-            : getChallengeFrequency();
-          setChallengeTimer(setTimeout(() => {
-            addNewChallenge();
-            setChallengeTimer(null);
-          }, delay));
-        }
-        const backup = setTimeout(() => {
-          if (currentStates.length < getMaxConcurrentChallenges() && gameActive && challengeTimer) {
-            clearTimeout(challengeTimer);
-            setChallengeTimer(null);
-          }
-        }, 8000);
-        return () => {
-          if (challengeTimer) clearTimeout(challengeTimer);
-          clearTimeout(backup);
-        };
-      }, [gameActive, currentStates, livesLeft, challengeTimer, difficulty]);
+      // Spawn next challenge 2s after previous completes
+      const scheduleNext = () => {
+        setTimeout(() => addNewChallenge(), 2000);
+      };
 
       const addNewChallenge = () => {
+        if (!gameActive) return;
+        // pick a new state not active and not recent
         const available = states.filter(s => {
           if (currentStates.some(c => c.id === s.id)) return false;
           const type = s.id.split('_')[0];
           return !recentChallenges.includes(type);
         });
-        if (!available.length) {
-          setChallengeTimer(setTimeout(() => setChallengeTimer(null), 3000));
-          return;
-        }
+        if (!available.length) return;
         const newState = available[Math.floor(Math.random() * available.length)];
+
         setCurrentStates(prev => [...prev, newState]);
         setActiveSensors(prev => [...prev, newState.sensor]);
-        setResponseNeeded(prev => ({...prev, [newState.id]: true}));
-        setResponseCountdown(prev => ({...prev, [newState.id]: getResponseTime(newState.responseTime)}));
+        setResponseNeeded(prev => ({ ...prev, [newState.id]: true }));
+        setResponseCountdown(prev => ({ ...prev, [newState.id]: getResponseTime(newState.responseTime) }));
 
-        // Countdown interval
+        // countdown interval
         const ci = setInterval(() => {
           setResponseCountdown(prev => {
-            const u = {...prev};
+            const u = { ...prev };
             if (u[newState.id]) {
               u[newState.id] -= 100;
               if (u[newState.id] <= 2000 && u[newState.id] > 0 && responseNeeded[newState.id]) {
@@ -276,17 +233,18 @@
             return u;
           });
         }, 100);
-        setCountdownIntervals(prev => ({...prev, [newState.id]: ci}));
+        setCountdownIntervals(prev => ({ ...prev, [newState.id]: ci }));
 
-        // Deadline
+        // deadline
         setTimeout(() => {
           setResponseNeeded(prev => {
-            const u = {...prev};
+            const u = { ...prev };
             if (u[newState.id]) {
               setLifeLostNotification(true);
               setLifeLostMessage(`LIFE LOST! ${newState.dangerMessage}`);
               setLivesLeft(l => l - 1);
-              setTimeout(() => removeChallenge(newState.id), 2000);
+              removeChallenge(newState.id);
+              scheduleNext();
               u[newState.id] = false;
             }
             return u;
@@ -295,24 +253,16 @@
       };
 
       const completeChallenge = id => {
-        // award point, cooldown, etc.
-        const parts = id.split('_');
-        if (parts.length) {
-          const type = parts[0];
-          setRecentChallenges(prev => [...prev, type]);
-          const cd = Math.max(15000 - (difficulty * 2000), 5000);
-          setTimeout(() => setRecentChallenges(prev => prev.filter(x => x !== type)), cd);
-        }
+        // cooldown
+        const type = id.split('_')[0];
+        setRecentChallenges(prev => [...prev, type]);
+        const cd = Math.max(15000 - (difficulty * 2000), 5000);
+        setTimeout(() => setRecentChallenges(prev => prev.filter(x => x !== type)), cd);
+
         setScore(s => s + 1);
         setMessage(`PERFECT! Score: ${score + 1}`);
-        setCurrentStates(prev => prev.filter(s => s.id !== id));
-        setTimeout(() => {
-          removeChallenge(id);
-          if (currentStates.length <= 1) setMessage(`PERFECT! Score: ${score + 1}`);
-        }, 100);
-        if (challengeTimer) clearTimeout(challengeTimer);
-        const next = Math.max(4000 - (difficulty * 500), 1000);
-        setChallengeTimer(setTimeout(() => setChallengeTimer(null), next));
+        removeChallenge(id);
+        scheduleNext();
       };
 
       const removeChallenge = id => {
@@ -327,9 +277,9 @@
         }));
         if (effectorTimeouts[id]) clearTimeout(effectorTimeouts[id]);
         if (countdownIntervals[id]) clearInterval(countdownIntervals[id]);
-        setHomeostasisRestored(prev => { const o = {...prev}; delete o[id]; return o; });
-        setResponseNeeded(prev => { const o = {...prev}; delete o[id]; return o; });
-        setResponseCountdown(prev => { const o = {...prev}; delete o[id]; return o; });
+        setHomeostasisRestored(prev => { const o = { ...prev }; delete o[id]; return o; });
+        setResponseNeeded(prev => { const o = { ...prev }; delete o[id]; return o; });
+        setResponseCountdown(prev => { const o = { ...prev }; delete o[id]; return o; });
       };
 
       const findStateByEffector = eid => states.find(s => s.effector === eid) || null;
@@ -341,7 +291,7 @@
         const sid = rs.id;
         const isCurr = currentStates.some(s => s.id === sid);
 
-        // Turning OFF
+        // turning off
         if (activeEffectors.includes(eid)) {
           if (isCurr && homeostasisRestored[sid]) {
             setActiveEffectors(prev => prev.filter(x => x !== eid));
@@ -352,50 +302,52 @@
             setLivesLeft(l => l - 1);
             setLifeLostNotification(true);
             setLifeLostMessage("LIFE LOST! You turned off too early!");
-            setTimeout(() => { if (isCurr) removeChallenge(sid); }, 2000);
+            removeChallenge(sid);
+            scheduleNext();
           }
           return;
         }
 
-        // Correct initial activation
+        // correct initial activation
         if (isCurr && responseNeeded[sid]) {
           setActiveEffectors(prev => [...prev, eid]);
-          setHomeostasisRestored(prev => ({...prev, [sid]: false}));
-          setResponseNeeded(prev => ({...prev, [sid]: false}));
+          setHomeostasisRestored(prev => ({ ...prev, [sid]: false }));
+          setResponseNeeded(prev => ({ ...prev, [sid]: false }));
           const half = Math.floor(getResponseTime(rs.responseTime) / 2);
           const t1 = setTimeout(() => {
-            setHomeostasisRestored(prev => ({...prev, [sid]: true}));
+            setHomeostasisRestored(prev => ({ ...prev, [sid]: true }));
             const t2 = setTimeout(() => {
               if (activeEffectors.includes(eid)) {
                 setMessage("You left it on too long!");
                 setLivesLeft(l => l - 1);
                 setLifeLostNotification(true);
                 setLifeLostMessage("LIFE LOST! Overcompensation!");
-                setTimeout(() => removeChallenge(sid), 2000);
+                removeChallenge(sid);
+                scheduleNext();
               }
             }, 8000);
-            setEffectorTimeouts(prev => ({...prev, [sid]: t2}));
+            setEffectorTimeouts(prev => ({ ...prev, [sid]: t2 }));
           }, half);
-          setEffectorTimeouts(prev => ({...prev, [sid + "_act"]: t1}));
+          setEffectorTimeouts(prev => ({ ...prev, [sid + "_act"]: t1 }));
         }
-        // Wrong effector clicked
+        // wrong effector
         else {
           setActiveEffectors(prev => [...prev, eid]);
           setMessage("Wrong effector! You lose a life!");
           setLivesLeft(l => l - 1);
           setLifeLostNotification(true);
-          setLifeLostMessage("LIFE LOST! Wrong effector clicked!");
+          setLifeLostMessage("LIFE LOST! Wrong click!");
           const tw = setTimeout(() => {
             setActiveEffectors(prev => prev.filter(x => x !== eid));
           }, 1500);
-          setEffectorTimeouts(prev => ({...prev, [eid + "_wrong"]: tw}));
+          setEffectorTimeouts(prev => ({ ...prev, [eid + "_wrong"]: tw }));
+          scheduleNext();
         }
       };
 
       const startGame = () => {
         Object.values(effectorTimeouts).forEach(t => clearTimeout(t));
         Object.values(countdownIntervals).forEach(i => clearInterval(i));
-        if (challengeTimer) clearTimeout(challengeTimer);
         setGameActive(true);
         setScore(0);
         setLivesLeft(3);
@@ -409,14 +361,14 @@
         setEffectorTimeouts({});
         setCountdownIntervals({});
         setResponseCountdown({});
-        setChallengeTimer(null);
         setRecentChallenges([]);
         setMemoryModePopupShown(false);
+        // first challenge after 2s
+        setTimeout(() => addNewChallenge(), 2000);
       };
       const endGame = () => {
         Object.values(effectorTimeouts).forEach(t => clearTimeout(t));
         Object.values(countdownIntervals).forEach(i => clearInterval(i));
-        if (challengeTimer) clearTimeout(challengeTimer);
         setGameActive(false);
         setMessage(`GAME OVER! Final score: ${score}.`);
         setCurrentStates([]);
@@ -426,11 +378,9 @@
         setResponseNeeded({});
         setEffectorTimeouts({});
         setCountdownIntervals({});
-        setChallengeTimer(null);
+        setResponseCountdown({});
         setRecentChallenges([]);
       };
-
-      const showHighlights = score < 5;
 
       return (
         <>
@@ -492,6 +442,7 @@
                     ? 'bg-red-100 border-red-500 animate-pulse'
                     : 'bg-yellow-100 border-yellow-500'
                 }`}
+                ref={bodyRef}
               >
                 {currentStates.length > 0 ? (
                   currentStates.map((st) => {
@@ -540,8 +491,8 @@
               <div className="w-1/4 pr-4">
                 <h2 className="text-xl font-bold text-blue-600 mb-4 text-center">SENSORS</h2>
                 <div className="space-y-4">
-                  {Array.from(new Set(states.map((s) => s.sensor))).map((sensor) => {
-                    const info = states.find((s) => s.sensor === sensor);
+                  {Array.from(new Set(states.map(s => s.sensor))).map(sensor => {
+                    const info = states.find(s => s.sensor === sensor);
                     const active = activeSensors.includes(sensor);
                     return (
                       <div key={sensor} className="relative">
@@ -566,30 +517,12 @@
               </div>
 
               {/* Body */}
-              <div
-                ref={bodyRef}
-                className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative z-10"
-                style={{ overflow: 'hidden' }}
-              >
-                <div
-                  className="human-body"
-                  style={{ width: '207px', position: 'relative', margin: '20px auto', height: '500px' }}
-                >
+              <div className="w-2/4 flex justify-center items-center border-2 border-gray-300 rounded-lg bg-white relative z-10" style={{ overflow: 'hidden' }}>
+                <div className="human-body" style={{ width: '207px', position: 'relative', margin: '20px auto', height: '500px' }}>
                   {/* Insert all your SVG body parts here exactly as before */}
                 </div>
                 <div className="absolute top-4 left-4 right-4 bg-blue-600 text-white font-bold border border-blue-800 rounded p-2 text-center shadow-lg">
                   ⚠️ CONTROL CENTER: Brain &amp; Nervous System ⚠️
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 bg-purple-100 border border-purple-300 rounded p-1 text-center text-sm">
-                  <div className="font-bold">
-                    Level {difficulty} {difficulty >= 3 ? '- Multiple challenges active!' : ''}
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                    <div
-                      className="h-2 rounded-full bg-purple-600"
-                      style={{ width: `${Math.min((score / 25) * 100, 100)}%` }}
-                    ></div>
-                  </div>
                 </div>
               </div>
 
@@ -597,19 +530,16 @@
               <div className="w-1/4 pl-4">
                 <h2 className="text-xl font-bold text-green-600 mb-4 text-center">EFFECTORS</h2>
                 <div className="space-y-4">
-                  {Array.from(new Set(states.map((s) => s.effector))).map((eff) => {
-                    const info = states.find((s) => s.effector === eff);
+                  {Array.from(new Set(states.map(s => s.effector))).map(eff => {
+                    const info = states.find(s => s.effector === eff);
                     const active = activeEffectors.includes(eff);
-                    const needed =
-                      showHighlights &&
-                      currentStates.some((s) => s.effector === eff && responseNeeded[s.id]);
-                    const canOff = currentStates.some((s) => s.effector === eff && homeostasisRestored[s.id]);
+                    const shouldHighlight = score < 5 && currentStates.some(s => s.effector === eff && responseNeeded[s.id]);
+                    const canOff = currentStates.some(s => s.effector === eff && homeostasisRestored[s.id]);
                     const btnText = active
                       ? canOff
                         ? info.restoreMessage.replace('!', '')
                         : info.effectorName
                       : info.effectorName;
-
                     return (
                       <div key={eff} className="relative">
                         <div
@@ -625,7 +555,7 @@
                               ? canOff
                                 ? 'bg-red-500 text-white border-red-700 font-bold shadow-lg scale-110'
                                 : 'bg-green-500 text-white border-green-700 font-bold shadow-lg scale-110'
-                              : needed
+                              : shouldHighlight
                               ? 'bg-yellow-100 hover:bg-yellow-200 border-yellow-500 font-bold shadow'
                               : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
                           }`}
